@@ -7,6 +7,7 @@
 
 #include <errno.h>
 #include <pthread.h>
+#include <signal.h>
 #include <unistd.h>
 #include <lws_runtime.h>
 #include <lws_interface.h>
@@ -45,8 +46,8 @@ static int lws_add_cookie(yyjson_mut_doc *doc, yyjson_mut_val *arr, char *data, 
 static int lws_add_headers(lws_ctx_t *ctx, yyjson_mut_doc *doc);
 
 
-static volatile int cancel_poll = 0;
-static volatile int in_poll = 0;
+static volatile sig_atomic_t cancel_poll = 0;
+static volatile sig_atomic_t in_poll = 0;
 static volatile curl_socket_t curl_socket = CURL_SOCKET_BAD;
 
 
