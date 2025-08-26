@@ -17,13 +17,13 @@ referenced in the `LWS_MAIN` and `LWS_PATH_INFO` variables (see below).
 Example value: `^/v1/(\w+)(/?.*)$`
 
 > [!IMPORTANT]
-> Depending where you set the `LWS_MATCH` variable, you may need to escape certain characters, in
-> particular backslashes (`\`), to ensure that the intended value is set.
+> Depending on where you set the `LWS_MATCH` variable, you may need to escape certain characters,
+> in particular backslashes (`\`), to ensure that the intended value is set.
 
 > [!CAUTION]
-> Allowing unconditional control characters in a match capture group referenced in the `LWS_MAIN`
-> variable can lead to security vulnerabilities, such as the processing of relative paths with
-> `..` segments, allowing access to arbitrary files on the file system.
+> If a `LWS_MATCH` capture group is referenced in the `LWS_MAIN` variable, ensure it cannot contain
+> punctuation characters that could form relative path segments (e.g., `..`); otherwise, attackers
+> might traverse directories and access unintended files.
 
 
 ### LWS_MAIN *main*
@@ -60,7 +60,7 @@ Example value: `handler/init.lua`
 ### LWS_PRE *pre*
 
 Sets the filepath of a pre Lua chunk relative to the task root. This chunk is run before the main
-chunks. Please see the [request processing](RequestProcessing.md) documentation for more
+chunk. Please see the [request processing](RequestProcessing.md) documentation for more
 information.
 
 Example value: `handler/pre.lua`
@@ -69,7 +69,7 @@ Example value: `handler/pre.lua`
 ### LWS_POST *post*
 
 Sets the filepath of a post Lua chunk relative to the task root. This chunk is run after the main
-chunks. Please see the [request processing](RequestProcessing.md) documentation for more
+chunk. Please see the [request processing](RequestProcessing.md) documentation for more
 information.
 
 Example value: `handler/post.lua`

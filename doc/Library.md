@@ -77,7 +77,7 @@ Indexing this table is strict and generates a Lua error if a key is not present.
 | `GONE`                           | 410   |
 | `LENGTH_REQUIRED`                | 411   |
 | `PRECONDITION_FAILED`            | 412   |
-| `CONTENT_LOO_LARGE`              | 413   |
+| `CONTENT_TOO_LARGE`              | 413   |
 | `URI_TOO_LONG`                   | 414   |
 | `UNSUPPORTED_MEDIA_TYPE`         | 415   |
 | `RANGE_NOT_SATISFIABLE`          | 416   |

@@ -4,7 +4,7 @@ LWS comes with two pre-configured Docker images with examples:
 
 * One image uses the *default* processing mode and provides HTTP web service examples with buffered
 and streamed responses. The default processing mode is useful for implementing HTTP services, such
-as thosed accessed via AWS Lambda function URLs.
+as those accessed via AWS Lambda function URLs.
 
 * The other image uses the *raw* processing mode and provides a simple event handler example. The
 raw processing mode is useful for implementing non-HTTP services, such as those driven by AWS
@@ -67,7 +67,7 @@ The `lambda-lws-examples-raw` service defines the following environment variable
 
 | Variable        | Description                                | Value             |
 | --------------- | ------------------------------------------ | ----------------- |
-| LWS_MAIN        | Main Lua chunk filename (fix)              | events/event.lua  |
+| LWS_MAIN        | Main Lua chunk filename (fixed)            | events/event.lua  |
 | LWS_RAW         | Raw processing mode (set in `Dockerfile`)  | on                |
 
 As the raw processing mode skips HTTP semantics, there is no HTTP request path mapping, and
@@ -116,7 +116,7 @@ The `bin` directory contains an example `deploy-default` script that performs th
 
 > [!IMPORTANT]
 > You may want to adjust various settings in the `deploy-default` script, such as the AWS region.
-> By default, the script uses the `eu-central-1` region (Frankfurt) and makes the functions URLs
+> By default, the script uses the `eu-central-1` region (Frankfurt) and makes the function URLs
 > publicly accessible without authentication on the Internet.
 
 After the function is successfully deployed, you can use `curl` to send requests to the function
@@ -146,7 +146,7 @@ configure a function URL, as the raw processing mode is typically used with even
 > You may want to adjust various settings in the `deploy-raw` script, such as the AWS region.
 > By default, the script uses the `eu-central-1` region (Frankfurt).
 
-Afer the function is successfully deployed, you can use the AWS CLI to test the function, for
+After the function is successfully deployed, you can use the AWS CLI to test the function, for
 example:
 
 ```sh
