@@ -618,7 +618,7 @@ int lws_get_next_invocation (lws_ctx_t *ctx) {
 					lws_log(LWS_LOG_ERR, "failed to decode base64 request body");
 					return -1;
 				}
-				/* TODO: maybe update null terminator */
+				ctx->req_body.data[ctx->req_body.len] = '\0';
 			}
 		} else {
 			lws_str_set(&ctx->req_body, "");
