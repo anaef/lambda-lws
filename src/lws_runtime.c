@@ -42,7 +42,7 @@ static void lws_getenv_str (const char *name, lws_str_t *value) {
 	char   *s;
 
 	s = getenv(name);
-	if (!s || !*s) {
+	if (!s || *s == '\0') {
 		lws_str_null(value);
 	} else {
 		value->len = strlen(s);;
@@ -55,13 +55,13 @@ static int lws_getenv_int (const char *name, lws_int_t *value) {
 	long   v;
 
 	s = getenv(name);
-	if (!s || !*s) {
+	if (!s || *s == '\0') {
 		*value = 0;
 		return 0;
 	}
 	errno = 0;
 	v = strtol(s, &end, 10);
-	if (errno != 0 || !*end) {
+	if (errno != 0 || *end != '\0') {
 		return -1;
 	}
 	*value = (lws_int_t)v;
@@ -74,7 +74,7 @@ static int lws_getenv_size (const char *name, size_t *value) {
 	unsigned long       base, result;
 
 	s = getenv(name);
-	if (!s || !*s) {
+	if (!s || *s == '\0') {
 		*value = 0;
 		return 0;
 	}
@@ -114,7 +114,7 @@ static int lws_getenv_flag (const char *name, int *value) {
 	char  *s;
 	
 	s = getenv(name);
-	if (!s || !*s) {
+	if (!s || *s == '\0') {
 		*value = 0;
 		return 0;
 	}
