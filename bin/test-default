@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+
+curl -X POST "http://localhost:8080/2015-03-31/functions/function/invocations" \
+  -H "Content-Type: application/json" \
+  -w "\n" \
+  -d @- <<'EOF'
+{
+  "version": "2.0",
+  "rawPath": "/echo/hello",
+  "rawQueryString": "param1=arg1",
+  "cookies": [
+    "cookie1=value1",
+    "cookie2=value2"
+  ],
+  "headers": {
+    "Content-Type": "application/json"
+  },
+  "requestContext": {
+    "http": {
+      "method": "POST",
+      "path": "/echo/hello",
+	    "protocol": "HTTP/1.1",
+      "sourceIp": "1.2.3.4"
+    }
+  },
+  "body": "{\"key\": \"value\"}",
+  "isBase64Encoded": false
+}
+EOF
+
+curl -X POST "http://localhost:8080/2015-03-31/functions/function/invocations" \
+  -H "Content-Type: application/json" \
+  -w "\n" \
+  -d @- <<'EOF'
+{
+  "version": "2.0",
+  "rawPath": "/stream",
+  "headers": {
+  },
+  "requestContext": {
+    "http": {
+      "method": "GET",
+      "path": "/stream",
+	    "protocol": "HTTP/1.1",
+      "sourceIp": "1.2.3.4"
+    }
+  },
+  "isBase64Encoded": false
+}
+EOF

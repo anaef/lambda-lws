@@ -1,0 +1,63 @@
+services:
+  build-env:
+    build:
+      context: .
+      target: build-env
+      args:
+        PACKAGES_BUILD: ${PACKAGES_BUILD}
+        LUA_VERSION: ${LUA_VERSION}
+        LUA_ABI: ${LUA_ABI}
+        LUAROCKS_VERSION: ${LUAROCKS_VERSION}
+        LUAROCKS: ${LUAROCKS}
+    image: lambda-lws/build-env:latest
+
+  lambda-lws:
+    build:
+      context: .
+      target: lambda-lws
+      args:
+        PACKAGES_BUILD: ${PACKAGES_BUILD}
+        PACKAGES_RUN: ${PACKAGES_RUN}
+        LUA_VERSION: ${LUA_VERSION}
+        LUA_ABI: ${LUA_ABI}
+        LUAROCKS_VERSION: ${LUAROCKS_VERSION}
+        LUAROCKS: ${LUAROCKS}
+    image: lambda-lws/lambda-lws:latest
+    restart: no
+  
+  lambda-lws-examples-default:
+    build:
+      context: .
+      target: lambda-lws-examples-default
+      args:
+        PACKAGES_BUILD: ${PACKAGES_BUILD}
+        PACKAGES_RUN: ${PACKAGES_RUN}
+        LUA_VERSION: ${LUA_VERSION}
+        LUA_ABI: ${LUA_ABI}
+        LUAROCKS_VERSION: ${LUAROCKS_VERSION}
+        LUAROCKS: ${LUAROCKS}
+        LWS_MATCH: "^/(\\w+)(/?.*)$"
+        LWS_MAIN: "services/$1.lua"
+        LWS_PATH_INFO: "$2"
+        LWS_DIAGNOSTIC: "on"
+    image: lambda-lws/lambda-lws-examples-default:latest
+    restart: no
+    ports:
+      - "8080:8080"
+
+  lambda-lws-examples-raw:
+    build:
+      context: .
+      target: lambda-lws-examples-raw
+      args:
+        PACKAGES_BUILD: ${PACKAGES_BUILD}
+        PACKAGES_RUN: ${PACKAGES_RUN}
+        LUA_VERSION: ${LUA_VERSION}
+        LUA_ABI: ${LUA_ABI}
+        LUAROCKS_VERSION: ${LUAROCKS_VERSION}
+        LUAROCKS: ${LUAROCKS}
+        LWS_MAIN: "events/event.lua"
+    image: lambda-lws/lambda-lws-examples-raw:latest
+    restart: no
+    ports:
+      - "8080:8080"

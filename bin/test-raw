@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+
+curl -X POST "http://localhost:8080/2015-03-31/functions/function/invocations" \
+  -H "Content-Type: application/json" \
+  -w "\n" \
+  -d @- <<'EOF'
+{
+  "event": "some-event",
+  "confirm": true
+}
+EOF
+
+curl -X POST "http://localhost:8080/2015-03-31/functions/function/invocations" \
+  -H "Content-Type: application/json" \
+  -w "\n" \
+  -d @- <<'EOF'
+{
+  "event": "some-event"
+}
+EOF

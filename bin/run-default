@@ -1,0 +1,4 @@
+#!/bin/env bash
+docker compose build lambda-lws-examples-default
+docker compose up lambda-lws-examples-default
+docker compose down lambda-lws-examples-default
