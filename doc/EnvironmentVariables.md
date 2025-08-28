@@ -130,7 +130,7 @@ Sets the log level of the custom runtime. The *log_level* value can take the val
 is `INFO`. The log levels are ordered from highest to lowest severity, and *log_level* sets the
 minimum severity of messages to be logged.
 
-> [!TIP]
+> [!IMPORTANT]
 > Most messages logged with a level of `DEBUG` are only emitted if the custom runtime is built with
 > debugging support enabled, i.e., `LWS_DEBUG=1`.
 
