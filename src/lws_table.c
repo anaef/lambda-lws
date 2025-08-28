@@ -7,6 +7,7 @@
 
 #include <lws_runtime.h>
 #include <lws_table.h>
+#include <lws_log.h>
 
 
 static lws_uint_t lws_table_hash(lws_table_t *t, lws_str_t *key);

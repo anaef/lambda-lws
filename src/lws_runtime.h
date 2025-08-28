@@ -9,13 +9,10 @@
 #define _LWS_RUNTIME_INCLUDED
 
 
-#include <pthread.h>
 #include <regex.h>
 #include <lua.h>
 #include <curl/curl.h>
 #include <yyjson.h>
-#include <lws_ngx.h>
-#include <lws_table.h>
 
 
 #ifndef LWS_STAT_CACHE_CAP
@@ -23,18 +20,15 @@
 #endif
 
 
-typedef enum {
-	LWS_LOG_EMERG,
-	LWS_LOG_ALERT,
-	LWS_LOG_CRIT,
-	LWS_LOG_ERR,
-	LWS_LOG_WARN,
-	LWS_LOG_NOTICE,
-	LWS_LOG_INFO,
-	LWS_LOG_DEBUG
-} lws_log_level_e;
+typedef struct lws_ctx_s  lws_ctx_t;
 
-typedef struct lws_ctx_s {
+
+#include <lws_ngx.h>
+#include <lws_log.h>
+#include <lws_table.h>
+
+
+struct lws_ctx_s {
 	/* configuration */
 	lws_str_t             runtime_api;            /* Lambda runtime API URL */
 	lws_str_t             task_root;              /* Lambda task root directory */
@@ -48,6 +42,8 @@ typedef struct lws_ctx_s {
 	size_t                state_gc;               /* Lua state explicite GC theshold; 0 = never */
 	lws_int_t             state_req_max;          /* maximum Lua state requests; 0 = unlimited */
 	int                   state_diagnostic;       /* include diagnostic w/ error response */
+	lws_log_level_e       log_level;              /* log level */
+	int                   log_text;               /* log in text format; default JSON */
 
 	/* state */
 	CURL 			     *curl;                   /* CURL handle */
@@ -63,7 +59,7 @@ typedef struct lws_ctx_s {
 	/* Lambda request */
 	char                  header[4096];           /* header buffer (fixed) */
 	size_t                header_len;             /* header length (current) */
-	char                  request_id[128];        /* request ID */
+	lws_str_t             request_id;             /* request ID */
 	off_t                 content_length;         /* content length; -1 if not present or invalid */
 	lws_str_t             body;                   /* request body */
 	size_t                body_cap;               /* request body capacity */
@@ -97,16 +93,9 @@ typedef struct lws_ctx_s {
 	unsigned              streaming_paused:1;	  /* streaming paused */
 	unsigned              streaming_eof:1;        /* streaming complete */
 	unsigned              streaming_separator:4;  /* streaming separator 0-bytes sent */
-} lws_ctx_t;
+};
 
 
-void lws_log(lws_log_level_e level, const char *fmt, ...)
-		__attribute__((format(printf, 2, 3)));
-#ifdef NDEBUG
-#define lws_log_debug(fmt, ...)  ((void)0)
-#else
-#define lws_log_debug(fmt, ...)  lws_log(LWS_LOG_DEBUG, fmt, ##__VA_ARGS__)
-#endif
 int main(int argc, char *argv[]);
 
 

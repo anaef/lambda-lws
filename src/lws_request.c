@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <sys/stat.h>
 #include <lws_runtime.h>
+#include <lws_log.h>
 #include <lws_request.h>
 #include <lws_interface.h>
 #include <lws_state.h>

@@ -8,6 +8,7 @@
 #include <lauxlib.h>
 #include <lualib.h>
 #include <lws_lib.h>
+#include <lws_log.h>
 #include <lws_interface.h>
 #include <lws_http.h>
 

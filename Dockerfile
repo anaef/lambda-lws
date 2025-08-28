@@ -44,7 +44,7 @@ done
 WORKDIR /build/bootstrap
 COPY Makefile /build/bootstrap/
 COPY src/ /build/bootstrap/src/
-RUN make LUA_ABI=${LUA_ABI}
+RUN make LUA_ABI=${LUA_ABI} MYCFLAGS="-DLWS_DEBUG=0"
 
 ENTRYPOINT ["/bin/bash"]
 CMD ["-c", "while true; do sleep 3600; done"]

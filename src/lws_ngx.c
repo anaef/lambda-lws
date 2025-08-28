@@ -30,6 +30,7 @@ SUCH DAMAGE.
 
 #include <lws_runtime.h>
 #include <lws_ngx.h>
+#include <lws_log.h>
 
 
 #ifndef __has_builtin

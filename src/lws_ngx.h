@@ -56,6 +56,7 @@ typedef struct lws_str_s {
 
 #define lws_tolower(c)          (char)((c >= 'A' && c <= 'Z') ? (c | 0x20) : c)
 #define lws_strncmp(s1, s2, n)  strncmp(s1, s2, n)
+#define lws_null_string         { 0, NULL }
 #define lws_string(lit)         { sizeof(lit) - 1, (char *)lit }
 #define lws_str_set(str, lit)   (str)->len = sizeof(lit) - 1; (str)->data = (char *)lit
 #define lws_str_null(str)       (str)->len = 0; (str)->data = NULL

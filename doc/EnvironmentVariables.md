@@ -123,6 +123,24 @@ numbers, function identifiers, and a stack traceback.
 > exploited by attackers.
 
 
+### LWS_LOG_LEVEL *log_level*
+
+Sets the log level of the custom runtime. The *log_level* value can take the values `EMERG`,
+`ALERT`, `CRIT`, `ERR`, `WARN`, `NOTICE`, `INFO`, and `DEBUG`. The default value for *log_level*
+is `INFO`. The log levels are ordered from highest to lowest severity, and *log_level* sets the
+minimum severity of messages to be logged.
+
+> [!TIP]
+> Most messages logged with a level of `DEBUG` are only emitted if the custom runtime is built with
+> debugging support enabled, i.e., `LWS_DEBUG=1`.
+
+
+### LWS_LOG_TEXT *log_text*
+
+Controls whether log messages are emitted in text format or in JSON format. The *log_text* value
+can take the values `on` or `off`. The default value for *log_text* is `off`, i.e., JSON format.
+
+
 ## Information Variables
 
 The following variables are set by LWS when processing a request.

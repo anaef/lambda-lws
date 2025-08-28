@@ -10,6 +10,7 @@
 #include <signal.h>
 #include <unistd.h>
 #include <lws_runtime.h>
+#include <lws_log.h>
 #include <lws_interface.h>
 #include <lws_ngx.h>
 #include <lws_codec.h>
@@ -245,13 +246,14 @@ static size_t lws_handle_header (char *buffer, size_t size, size_t nitems, void 
 
 					case sizeof(LWS_LAMBDA_REQUEST_ID) - 1:
 						if (lws_strncasecmp(ctx->header, LWS_LAMBDA_REQUEST_ID, name_len) == 0) {
-							if (val_len >= sizeof(ctx->request_id)) {
-								lws_log(LWS_LOG_ERR, "request ID too long val_len:%zu", val_len);
+							ctx->request_id.data = lws_alloc(val_len);
+							if (!ctx->request_id.data) {
 								return 0;
 							}
-							memcpy(ctx->request_id, val, val_len);
-							ctx->request_id[val_len] = '\0';
-							lws_log_debug("header request_id:%s", ctx->request_id);
+							memcpy(ctx->request_id.data, val, val_len);
+							ctx->request_id.len = val_len;
+							lws_log_debug("header request_id:%.*s", (int)ctx->request_id.len,
+									ctx->request_id.data);
 						}
 						break;
 				}
@@ -418,7 +420,7 @@ int lws_get_next_invocation (lws_ctx_t *ctx) {
 		return -1;
 	}
 	in_poll = 0;
-	if (ctx->request_id[0] == '\0') {
+	if (!ctx->request_id.len) {
 		lws_log(LWS_LOG_CRIT, "missing request ID header");
 		return -1;
 	}
@@ -739,8 +741,9 @@ int lws_post_response (lws_ctx_t *ctx) {
 
 	/* prepare response URL */
 	snprintf(response_url, sizeof(response_url),
-			"http://%.*s/%s/runtime/invocation/%s/response", (int)ctx->runtime_api.len,
-			ctx->runtime_api.data, LWS_LAMBDA_RUNTIME_VERSION, ctx->request_id);
+			"http://%.*s/%s/runtime/invocation/%.*s/response", (int)ctx->runtime_api.len,
+			ctx->runtime_api.data, LWS_LAMBDA_RUNTIME_VERSION, (int)ctx->request_id.len,
+			ctx->request_id.data);
 
 	/* prepare Lambda headers */
 	curl_headers = curl_slist_append(curl_headers, "Content-Type: application/json");
@@ -893,8 +896,9 @@ int lws_stream_response (lws_ctx_t *ctx, int finish) {
 
 	/* prepare response URL */
 	snprintf(response_url, sizeof(response_url),
-			"http://%.*s/%s/runtime/invocation/%s/response", (int)ctx->runtime_api.len,
-			ctx->runtime_api.data, LWS_LAMBDA_RUNTIME_VERSION, ctx->request_id);
+			"http://%.*s/%s/runtime/invocation/%.*s/response", (int)ctx->runtime_api.len,
+			ctx->runtime_api.data, LWS_LAMBDA_RUNTIME_VERSION, (int)ctx->request_id.len,
+			ctx->request_id.data);
 
 	/* prepare Lambda headers */
 	curl_headers = curl_slist_append(curl_headers, LWS_LAMBDA_STREAMING_CT);
@@ -972,15 +976,16 @@ int lws_post_error (lws_ctx_t *ctx, const char *error_message) {
 	struct curl_slist  *curl_headers;
 
 	/* log error, prepare error url */
-	if (ctx->request_id[0] == '\0') {
+	if (!ctx->request_id.len) {
 		lws_log(LWS_LOG_EMERG, "initialization error msg:%s", error_message);
 		snprintf(error_url, sizeof(error_url), "http://%.*s/%s/runtime/init/error",
 				(int)ctx->runtime_api.len, ctx->runtime_api.data, LWS_LAMBDA_RUNTIME_VERSION);
 	} else {
-		lws_log(LWS_LOG_ERR, "request error id:%s msg:%s", ctx->request_id, error_message);
+		lws_log(LWS_LOG_ERR, "request error msg:%s", error_message);
 		snprintf(error_url, sizeof(error_url),
-				"http://%.*s/%s/runtime/invocation/%s/error", (int)ctx->runtime_api.len,
-				ctx->runtime_api.data, LWS_LAMBDA_RUNTIME_VERSION, ctx->request_id);
+				"http://%.*s/%s/runtime/invocation/%.*s/error", (int)ctx->runtime_api.len,
+				ctx->runtime_api.data, LWS_LAMBDA_RUNTIME_VERSION, (int)ctx->request_id.len,
+				ctx->request_id.data);
 	}
 
 	/* init state */

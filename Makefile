@@ -1,7 +1,9 @@
 LUA_ABI=5.4
+MYCFLAGS=
 
 CC?=gcc
-CFLAGS?=-O2 -W -Wall -Wpointer-arith -Wno-unused-parameter -Werror -Isrc -I/usr/include/lua$(LUA_ABI) -D_GNU_SOURCE
+MYCFLAGS?=
+CFLAGS?=-O2 -W -Wall -Wpointer-arith -Wno-unused-parameter -Werror -Isrc -I/usr/include/lua$(LUA_ABI) -D_GNU_SOURCE $(MYCFLAGS)
 LDFLAGS?=
 LIBS?=-lcurl -lyyjson -llua$(LUA_ABI) -lm
 SRC=$(wildcard src/*.c)

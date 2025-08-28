@@ -21,12 +21,10 @@ static void lws_getenv_str(const char *name, lws_str_t *value);
 static int lws_getenv_int(const char *name, lws_int_t *value);
 static int lws_getenv_size(const char *name, size_t *value);
 static int lws_getenv_flag(const char *name, int *value);
-
+static int lws_getenv_enum(const char *name, unsigned int *value, lws_str_t *options,
+		const char *dfl);
 
 static volatile sig_atomic_t keep_running = 1;
-static const char *const lws_log_levels[] = {
-	"EMERG", "ALERT", "CRIT", "ERR", "WARN", "NOTICE", "INFO", "DEBUG"
-};
 
 
 /*
@@ -128,28 +126,23 @@ static int lws_getenv_flag (const char *name, int *value) {
 	return 0;
 }
 
-void lws_log (lws_log_level_e level, const char *fmt, ...) {
-	char       tbuf[21];
-	time_t     now;
-	va_list    ap;
-	struct tm  tm;
+static int lws_getenv_enum (const char *name, unsigned int *value, lws_str_t *options, const char *dfl) {
+	int     i;
+	char   *s;
+	size_t  len;
 
-	if (level < LWS_LOG_EMERG) {
-		level = LWS_LOG_EMERG;
-	} else if (level > LWS_LOG_DEBUG) {
-		level = LWS_LOG_DEBUG;
+	s = getenv(name);
+	if (!s || *s == '\0') {
+		s = (char *)dfl;
 	}
-	now = time(NULL);
-	gmtime_r(&now, &tm);
-	strftime(tbuf, sizeof(tbuf), "%Y-%m-%dT%H:%M:%SZ", &tm);
-	flockfile(stdout);
-	fprintf(stdout, "%s [%s] (LWS) ", tbuf, lws_log_levels[level]);
-	va_start(ap, fmt);
-	vfprintf(stdout, fmt, ap);
-	va_end(ap);
-	fputc('\n', stdout);
-	fflush(stdout);
-	funlockfile(stdout);
+	len = strlen(s);
+	for (i = 0; options[i].len; i++) {
+		if (options[i].len == len && lws_strncmp(options[i].data, s, len) == 0) {
+			*value = i;
+			return 0;
+		}
+	}
+	return -1;
 }
 
 int main (int argc, char *argv[]) {
@@ -169,6 +162,9 @@ int main (int argc, char *argv[]) {
 	/* init context */
 	lws_memzero(&ctx, sizeof(ctx));
 	ctx.content_length = -1;
+
+	/* set log context */
+	lws_log_setctx(&ctx);
 
 	/* get runtime API */
 	lws_getenv_str("AWS_LAMBDA_RUNTIME_API", &ctx.runtime_api);
@@ -247,6 +243,16 @@ int main (int argc, char *argv[]) {
 		rc = EXIT_FAILURE;
 		goto global_cleanup;
 	}
+	if (lws_getenv_enum("LWS_LOG_LEVEL", &ctx.log_level, lws_log_levels, "INFO") != 0) {
+		lws_post_error(&ctx, "bad LWS_LOG_LEVEL value");
+		rc = EXIT_FAILURE;
+		goto global_cleanup;
+	}
+	if (lws_getenv_flag("LWS_LOG_TEXT", &ctx.log_text) != 0) {
+		lws_post_error(&ctx, "bad LWS_LOG_TEXT value");
+		rc = EXIT_FAILURE;
+		goto global_cleanup;
+	}
 
 	/* initailize stat cache */
 	ctx.stat_cache = lws_table_create(32);
@@ -282,7 +288,7 @@ int main (int argc, char *argv[]) {
 		/* get invocation */
 		if (lws_get_next_invocation(&ctx) != 0) {
 			if (keep_running) {
-				if (ctx.request_id[0] != '\0') {
+				if (ctx.request_id.len) {
 					/* we got a request ID and can inform the runtime */
 					if (lws_post_error(&ctx, "failed to get next invocation") != 0) {
 						rc = EXIT_FAILURE;
@@ -296,6 +302,11 @@ int main (int argc, char *argv[]) {
 			}
 			goto request_cleanup;
 		}
+
+		/* log request */
+		lws_log(LWS_LOG_INFO, "request method:%.*s path:%.*s",
+				(int)ctx.req_method.len, ctx.req_method.data,
+				(int)ctx.req_path.len, ctx.req_path.data);
 
 		/* handle request */
 		if ((rc_request = lws_handle_request(&ctx)) != 0) {
@@ -341,7 +352,10 @@ int main (int argc, char *argv[]) {
 
 		/* Lambda request cleanup */
 		ctx.header_len = 0;
-		ctx.request_id[0] = '\0';
+		if (ctx.request_id.data) {
+			lws_free(ctx.request_id.data);
+			lws_str_null(&ctx.request_id);
+		}
 		ctx.content_length = -1;
 		if (ctx.body.data) {
 			lws_free(ctx.body.data);

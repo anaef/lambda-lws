@@ -10,6 +10,7 @@
 #include <lauxlib.h>
 #include <lws_lib.h>
 #include <lws_state.h>
+#include <lws_log.h>
 
 
 #if LUA_VERSION_NUM < 502
@@ -105,7 +106,7 @@ int lws_acquire_state (lws_ctx_t *ctx) {
 }
 
 void lws_release_state (lws_ctx_t *ctx) {
-	size_t  memory_used;
+	size_t  memory_used, memory_used_after;
 
 	/* close state? */
 	ctx->req_count++;
@@ -119,14 +120,11 @@ void lws_release_state (lws_ctx_t *ctx) {
 		memory_used = (size_t)lua_gc(ctx->L, LUA_GCCOUNT, 0) * 1024
 				+ lua_gc(ctx->L, LUA_GCCOUNTB, 0);
 		if (memory_used >= ctx->state_gc) {
-			lws_log_debug("performing GC memory_used:%zu state_gc:%zu", memory_used,
-					ctx->state_gc);
 			lua_gc(ctx->L, LUA_GCCOLLECT, 0);
-#ifndef NDEBUG
-			memory_used = (size_t)lua_gc(ctx->L, LUA_GCCOUNT, 0) * 1024
+			memory_used_after = (size_t)lua_gc(ctx->L, LUA_GCCOUNT, 0) * 1024
 					+ lua_gc(ctx->L, LUA_GCCOUNTB, 0);
-			lws_log_debug("GC complete memory_used:%zu", memory_used);
-#endif			
+			lws_log(LWS_LOG_NOTICE, "GC state_gc:%zu used:%zu after:%zu", ctx->state_gc,
+					memory_used, memory_used_after);
 		}
 	}
 }
