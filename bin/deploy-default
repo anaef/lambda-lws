@@ -58,10 +58,10 @@ aws lambda create-function \
 		--function-name "$FUNC_NAME" \
 		--timeout 5 \
 		--region "$AWS_REGION" >/dev/null
-	aws lambda wait function-updated \
-		--function-name "$FUNC_NAME" \
-		--region "$AWS_REGION" >/dev/null
 }
+aws lambda wait function-updated \
+	--function-name "$FUNC_NAME" \
+	--region "$AWS_REGION" >/dev/null
 
 # obtain the version of the deployed function
 VERSION="$(aws lambda publish-version \
