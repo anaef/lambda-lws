@@ -99,9 +99,9 @@ void lws_log (lws_log_level_e level, const char *fmt, ...) {
 			yyjson_mut_doc_free(doc);
 			goto textmode;
 		}
-		if (ctx->request_id.len) {
-			if (!yyjson_mut_obj_add_strn(doc, root, "requestId", ctx->request_id.data,
-					ctx->request_id.len)) {
+		if (ctx->request_id) {
+			if (!yyjson_mut_obj_add_strn(doc, root, "requestId", ctx->request_id->data,
+					ctx->request_id->len)) {
 				yyjson_mut_doc_free(doc);
 				goto textmode;
 			}
@@ -123,11 +123,11 @@ void lws_log (lws_log_level_e level, const char *fmt, ...) {
 
 	textmode:
 	flockfile(stdout);
-	if (ctx->request_id.len) {
+	if (ctx->request_id) {
 		fprintf(stdout, "%.*s [%.*s] %.*s %.*s\n",
 				(int)tsm_len, tsm,
 				(int)lws_log_levels[level].len, lws_log_levels[level].data,
-				(int)ctx->request_id.len, ctx->request_id.data,
+				(int)ctx->request_id->len, ctx->request_id->data,
 				(int)msg_len, msg);
 	} else {
 		fprintf(stdout, "%.*s [%.*s] %.*s\n",

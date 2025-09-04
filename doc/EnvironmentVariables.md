@@ -78,8 +78,8 @@ Example value: `handler/post.lua`
 ### LWS_RAW *raw*
 
 Controls the raw processing mode. In this mode, the custom runtime skips the HTTP semantics
-processing of AWS Lambda function URLs and provides the raw request body to the Lua service. This
-is suitable for implementing non-HTTP services, such as those driven by AWS Lambda event source
+processing of AWS Lambda function URLs and provides the raw request to the Lua service. This is
+suitable for implementing non-HTTP services, such as those driven by AWS Lambda event source
 mappings. The *raw* value can take the values `on` and `off`. The default value for *raw* is `off`.
 Please see the [request processing](RequestProcessing.md) documentation for more information.
 
@@ -150,9 +150,3 @@ The following variables are set by LWS when processing a request.
 
 Set to the value of the `Lambda-Runtime-Trace-Id` header, if provided in the AWS Lambda request.
 The value is a string representing the AWS X-Ray trace context for the request.
-
-
-### _DEADLINE_MS
-
-Set to the value of the `Lambda-Runtime-Deadline-Ms` header, if provided in the AWS Lambda request.
-The value is a string representing the function timeout as a Unix timestamp in milliseconds.

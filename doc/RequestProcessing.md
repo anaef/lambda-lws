@@ -37,15 +37,17 @@ manage information pertinent to the HTTP request.
 
 ### `request` Value
 
-| Key          | Type          | Description                                                          | 
-| ------------ | ------------- | -------------------------------------------------------------------- |
-| `method`     | `string`      | HTTP request method                                                  |
-| `path`       | `string`      | HTTP request path                                                    |
-| `args`       | `string`      | HTTP request query parameters                                        |
-| `headers`    | `table`-like  | HTTP request headers (case-insensitive keys, read-only)              |
-| `body`       | `file`        | HTTP request body (Lua file handle interface, read-only)             |
-| `path_info`  | `string`      | Path info, as defined with the `LWS_PATH_INFO` environment variable  |
-| `ip`         | `string`      | Remote IP address of the request                                     |
+| Key            | Type          | Description                                                             | 
+| -------------- | ------------- | ----------------------------------------------------------------------- |
+| `method`       | `string`      | HTTP request method                                                     |
+| `path`         | `string`      | HTTP request path                                                       |
+| `args`         | `string`      | HTTP request query parameters                                           |
+| `headers`      | `table`-like  | HTTP request headers (case-insensitive keys, read-only)                 |
+| `body`         | `file`        | HTTP request body (Lua file handle interface, read-only)                |
+| `path_info`    | `string`      | Path info, as defined with the `LWS_PATH_INFO` environment variable     |
+| `ip`           | `string`      | Remote IP address of the request                                        |
+| `raw.headers`  | `table`-like  | Raw request headers from AWS Lambda (case-insensitive keys, read-only)  |
+| `raw.body`     | `table`-like  | Raw request body from AWS Lambda (parsed JSON document, read-only)      |
 
 
 ### `response` Value
@@ -120,13 +122,44 @@ A positive integer result from the main chunk is ignored in streaming mode, and 
 not sent.
 
 
+## Raw Request 
+
+The raw request headers and body from AWS Lambda are available in the `request.raw.headers` and
+`request.raw.body` values, respectively. These values are read-only. The headers can be indexed
+with case-insensitive string keys and iterated with `pairs`. The body is a parsed JSON document
+represented as a table-like value. JSON objects support field access by string keys and iteration
+with `pairs`. JSON arrays support access by integer indices, the `#` operator, and iteration with
+`ipairs`. For example, the statement `for i, v in ipairs(request.raw.body.cookies) do ... end`
+iterates over the cookies present in the raw request body. (In Lua 5.1, the `lws.pairs` and 
+`lws.ipairs` functions must be used.)
+
+> [!IMPORTANT]
+> The `request.raw` value is specific to LWS for AWS Lambda and is not supported in LWS for NGINX.
+> You should use the non-raw `request` values for typical HTTP request processing. The
+> `request.raw` values are provided to support use cases such as the raw procesinng mode (see
+> below), extracting the AWS Lambda request deadline from the raw request headers, or accessing
+> additional information supplied by AWS Lambda in the request context. Please see
+> [Using the Lambda runtime API for custom runtimes](https://docs.aws.amazon.com/lambda/latest/dg/runtimes-api.html)
+> for more information about the raw request headers, and
+> [Invoking Lambda function URLs](https://docs.aws.amazon.com/lambda/latest/dg/urls-invocation.html)
+> for more information about the raw request body in the context of AWS Lambda function URLs.
+
+> [!WARNING]
+> In the default processing mode for AWS Lamba function URLs, the runtime presently decodes a
+> base64-encoded request body inplace, implying that `request.raw.body.body` likely contains
+> invalid data if `request.raw.body.isBase64Encoded` is `true`. This is an implementation detail
+> that may change in future versions. To access the HTTP request body of an AWS Lambda function
+> URL, the `request.body` value should be used, as generally noted above.
+
+
 ## Raw Processing Mode
 
 The raw processing mode is enabled by setting the `LWS_RAW` environment variable to `on`. In this
 mode, the custom runtime skips the HTTP semantics processing of AWS Lambda function URLs and
-provides the raw request body to the Lua service. Consequently, in the `request` and `response`
-tables, only the `body` key is valid. If the Lua service produces a response body, it must be a
-valid JSON document; otherwise, the custom runtime supplies `null` as the response body.
+provides the raw request to the Lua service. Consequently, in the `request` table, only the `raw`
+key is valid, and in the `response` table, only the `body` key is valid. If the Lua service
+produces a response body, it must be a valid JSON document; if no response body is produced, the
+custom runtime supplies `null` as the response body.
 
 > [!TIP]
 > The raw processing mode is useful for implementing non-HTTP services, such as those driven by

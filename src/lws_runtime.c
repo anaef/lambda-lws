@@ -265,6 +265,15 @@ int main (int argc, char *argv[]) {
 	lws_table_set_cap(ctx.stat_cache, LWS_STAT_CACHE_CAP);
 
 	/* initialize the header tables */
+	ctx.headers = lws_table_create(32);
+	if (!ctx.headers) {
+		lws_post_error(&ctx, "failed to create headers table");
+		rc = EXIT_FAILURE;
+		goto global_cleanup;
+	}
+	lws_table_set_dup(ctx.headers, 1);
+	lws_table_set_free(ctx.headers, 1);
+	lws_table_set_ci(ctx.headers, 1);
 	ctx.req_headers = lws_table_create(32);
 	if (!ctx.req_headers) {
 		lws_post_error(&ctx, "failed to create request headers table");
@@ -288,7 +297,7 @@ int main (int argc, char *argv[]) {
 		/* get invocation */
 		if (lws_get_next_invocation(&ctx) != 0) {
 			if (keep_running) {
-				if (ctx.request_id.len) {
+				if (ctx.request_id) {
 					/* we got a request ID and can inform the runtime */
 					if (lws_post_error(&ctx, "failed to get next invocation") != 0) {
 						rc = EXIT_FAILURE;
@@ -351,11 +360,8 @@ int main (int argc, char *argv[]) {
 		request_cleanup:
 
 		/* Lambda request cleanup */
-		ctx.header_len = 0;
-		if (ctx.request_id.data) {
-			lws_free(ctx.request_id.data);
-			lws_str_null(&ctx.request_id);
-		}
+		lws_table_clear(ctx.headers);
+		ctx.request_id = NULL;
 		ctx.content_length = -1;
 		if (ctx.body.data) {
 			lws_free(ctx.body.data);
@@ -367,8 +373,6 @@ int main (int argc, char *argv[]) {
 			yyjson_doc_free(ctx.doc);
 			ctx.doc = NULL;
 		}
-		ctx.got_trace = 0;
-		ctx.got_deadline = 0;
 
 		/* payload request cleanup */
 		lws_str_null(&ctx.req_method);
@@ -390,6 +394,7 @@ int main (int argc, char *argv[]) {
 			}
 			ctx.req_body_file = NULL;
 		}
+		lws_str_null(&ctx.req_body);
 
 		/* payload response cleanup */
 		lws_table_clear(ctx.resp_headers);
@@ -446,6 +451,11 @@ int main (int argc, char *argv[]) {
 	}
 	if (ctx.L) {
 		lws_close_state(&ctx);
+	}
+
+	/* cleanup Lambda request */
+	if (ctx.headers) {
+		lws_table_free(ctx.headers);
 	}
 
 	/* cleanup payload request */

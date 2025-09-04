@@ -12,6 +12,9 @@
 #include <lws_interface.h>
 #include <lws_http.h>
 
+#if LUA_VERSION_NUM < 503
+#define LUA_MAXINTEGER  PTRDIFF_MAX
+#endif
 
 #if LUA_VERSION_NUM < 502
 #define LUA_OK                              0
@@ -49,11 +52,25 @@ static lws_lua_table_t *lws_create_lua_table(lua_State *L);
 static int lws_lua_table_index(lua_State *L);
 static int lws_lua_table_newindex(lua_State *L);
 static int lws_lua_table_next(lua_State *L);
-#if LUA_VERSION_NUM >= 502
 static int lws_lua_table_pairs(lua_State *L);
-#endif
 static int lws_lua_table_tostring(lua_State *L);
 static int lws_lua_table_gc(lua_State *L);
+
+/* yyjson */
+static int lws_lua_yyjson_push_val(lua_State *L, yyjson_val *v);
+static lws_lua_yyjson_val_t *lws_create_lua_yyjson_val(lua_State *L, const char *name);
+static int lws_lua_yyjson_arr_index(lua_State *L);
+static int lws_lua_yyjson_arr_len(lua_State *L);
+#if LUA_VERSION_NUM < 503
+static int lws_lua_yyjson_arr_next(lua_State *L);
+static int lws_lua_yyjson_arr_ipairs(lua_State *L);
+#endif
+static int lws_lua_yyjson_arr_tostring(lua_State *L);
+static int lws_lua_yyjson_obj_index(lua_State *L);
+static int lws_lua_yyjson_obj_next(lua_State *L);
+static int lws_lua_yyjson_obj_pairs(lua_State *L);
+static int lws_lua_yyjson_obj_tostring(lua_State *L);
+static int lws_lua_yyjson_obj_iter_tostring(lua_State *L);
 
 /* response */
 static int lws_lua_response_index(lua_State *L);
@@ -76,6 +93,7 @@ static int lws_setclose(lua_State *L);
 static int lws_parseargs(lua_State *L);
 #if LUA_VERSION_NUM < 502
 static int lws_pairs(lua_State *L);
+static int lws_ipairs(lua_State *L);
 #endif
 
 /* run */
@@ -325,14 +343,12 @@ static int lws_lua_table_next (lua_State *L) {
 	return 2;
 }
 
-#if LUA_VERSION_NUM >= 502
 static int lws_lua_table_pairs (lua_State *L) {
 	lua_pushcfunction(L, lws_lua_table_next);
 	lua_pushvalue(L, 1);
 	lua_pushnil(L);
 	return 3;
 }
-#endif
 
 static int lws_lua_table_tostring (lua_State *L) {
 	lws_lua_table_t  *lt;
@@ -350,6 +366,188 @@ static int lws_lua_table_gc (lua_State *L) {
 		lws_table_free(lt->t);
 	}
 	return 0;
+}
+
+
+/*
+ * yyjson
+ */
+
+static int lws_lua_yyjson_push_val (lua_State *L, yyjson_val *v) {
+	size_t                len;
+	const char           *s;
+	lws_lua_yyjson_val_t  *val;
+
+	/* no value? */
+	if (!v) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	/* handle types */
+	switch (yyjson_get_type(v)) {
+	case YYJSON_TYPE_BOOL:
+		lua_pushboolean(L, yyjson_get_bool(v));
+		break;
+
+	case YYJSON_TYPE_NUM:
+		switch (yyjson_get_subtype(v)) {
+		case YYJSON_SUBTYPE_SINT:
+		case YYJSON_SUBTYPE_UINT:
+			lua_pushinteger(L, yyjson_get_sint(v));
+			break;
+
+		default:
+			lua_pushnumber(L, yyjson_get_real(v));
+			break;
+		}
+		break;
+
+	case YYJSON_TYPE_STR:
+		s = yyjson_get_str(v);
+		len = yyjson_get_len(v);
+		lua_pushlstring(L, s, len);
+		break;
+
+	case YYJSON_TYPE_ARR:
+		val = lws_create_lua_yyjson_val(L, LWS_YYJSON_ARR);
+		val->v = v;
+		break;
+
+	case YYJSON_TYPE_OBJ:
+		val = lws_create_lua_yyjson_val(L, LWS_YYJSON_OBJ);
+		val->v = v;
+		break;
+
+	default:
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
+static lws_lua_yyjson_val_t *lws_create_lua_yyjson_val (lua_State *L, const char *name) {
+	lws_lua_yyjson_val_t  *lval;
+
+	lval = lua_newuserdata(L, sizeof(lws_lua_yyjson_val_t));
+	lws_memzero(lval, sizeof(lws_lua_yyjson_val_t));
+	luaL_getmetatable(L, name);
+	lua_setmetatable(L, -2);
+	return lval;
+}
+
+static int lws_lua_yyjson_arr_index (lua_State *L) {
+	int                    isnum;
+	lua_Integer            index;
+	lws_lua_yyjson_val_t  *lval;
+
+	lval = luaL_checkudata(L, 1, LWS_YYJSON_ARR);
+	index = lua_tointegerx(L, 2, &isnum);
+	if (!isnum) {
+		lua_pushnil(L);
+		return 1;
+	}
+	return lws_lua_yyjson_push_val(L, yyjson_arr_get(lval->v, (size_t)(index - 1)));
+}
+
+static int lws_lua_yyjson_arr_len (lua_State *L) {
+	size_t                 len;
+	lws_lua_yyjson_val_t  *lval;
+
+	lval = luaL_checkudata(L, 1, LWS_YYJSON_ARR);
+	len = yyjson_arr_size(lval->v);
+	lua_pushinteger(L, len <= LUA_MAXINTEGER ? (lua_Integer)len : LUA_MAXINTEGER);
+	return 1;
+}
+
+#if LUA_VERSION_NUM < 503
+static int lws_lua_yyjson_arr_next (lua_State *L) {
+	lua_Integer            index;
+	lws_lua_yyjson_val_t  *lval;
+
+	lval = luaL_checkudata(L, 1, LWS_YYJSON_ARR);
+	index = luaL_checkinteger(L, 2);
+	index++;
+	if (index < 1 || (size_t)index > yyjson_arr_size(lval->v)) {
+		return 0;
+	}
+	lua_pushinteger(L, index);
+	(void)lws_lua_yyjson_push_val(L, yyjson_arr_get(lval->v, (size_t)(index - 1)));
+	return 2;
+}
+
+static int lws_lua_yyjson_arr_ipairs (lua_State *L) {
+	(void)luaL_checkudata(L, 1, LWS_YYJSON_ARR);
+	lua_pushcfunction(L, lws_lua_yyjson_arr_next);
+	lua_pushvalue(L, 1);
+	lua_pushinteger(L, 0);
+	return 3;
+}
+#endif
+
+static int lws_lua_yyjson_arr_tostring (lua_State *L) {
+	lws_lua_yyjson_val_t  *lval;
+
+	lval = luaL_checkudata(L, 1, LWS_YYJSON_ARR);
+	lua_pushfstring(L, LWS_YYJSON_ARR ": %p", lval->v);
+	return 1;
+}
+
+static int lws_lua_yyjson_obj_index (lua_State *L) {
+	lws_str_t              key;
+	lws_lua_yyjson_val_t  *lval;
+
+	lval = luaL_checkudata(L, 1, LWS_YYJSON_OBJ);
+	if (!lua_isstring(L, 2)) {
+		lua_pushnil(L);
+		return 1;
+	}
+	key.data = (char *)lua_tolstring(L, 2, &key.len);
+	return lws_lua_yyjson_push_val(L, yyjson_obj_getn(lval->v, key.data, key.len));
+}
+
+static int lws_lua_yyjson_obj_next (lua_State *L) {
+	yyjson_val                 *key, *val;
+	lws_lua_yyjson_obj_iter_t  *liter;
+
+	liter = luaL_checkudata(L, 1, LWS_YYJSON_OBJ_ITER);
+	if (!yyjson_obj_iter_has_next(&liter->iter)) {
+		return 0;
+	}
+	key = yyjson_obj_iter_next(&liter->iter);
+	val = yyjson_obj_iter_get_val(key);
+	(void)lws_lua_yyjson_push_val(L, key);
+	(void)lws_lua_yyjson_push_val(L, val);
+	return 2;
+}
+
+static int lws_lua_yyjson_obj_pairs (lua_State *L) {
+	lws_lua_yyjson_val_t       *lval;
+	lws_lua_yyjson_obj_iter_t  *liter;
+
+	lval = luaL_checkudata(L, 1, LWS_YYJSON_OBJ);
+	lua_pushcfunction(L, lws_lua_yyjson_obj_next);
+	liter = lua_newuserdata(L, sizeof(lws_lua_yyjson_obj_iter_t));
+	liter->iter = yyjson_obj_iter_with(lval->v);
+	luaL_getmetatable(L, LWS_YYJSON_OBJ_ITER);
+	lua_setmetatable(L, -2);
+	lua_pushboolean(L, 1);
+	return 3;
+}
+
+static int lws_lua_yyjson_obj_tostring (lua_State *L) {
+	lws_lua_yyjson_val_t  *lval;
+
+	lval = luaL_checkudata(L, 1, LWS_YYJSON_OBJ);
+	lua_pushfstring(L, LWS_YYJSON_OBJ ": %p", lval->v);
+	return 1;
+}
+
+static int lws_lua_yyjson_obj_iter_tostring (lua_State *L) {
+	lws_lua_yyjson_obj_iter_t  *liter;
+
+	liter = luaL_checkudata(L, 1, LWS_YYJSON_OBJ_ITER);
+	lua_pushfstring(L, LWS_YYJSON_OBJ_ITER ": %p", &liter);
+	return 1;
 }
 
 
@@ -629,11 +827,27 @@ static int lws_parseargs (lua_State *L) {
 
 #if LUA_VERSION_NUM < 502
 static int lws_pairs (lua_State *L) {
-	(void)luaL_checkudata(L, 1, LWS_TABLE);
-	lua_pushcfunction(L, lws_lua_table_next);
-	lua_pushvalue(L, 1);
-	lua_pushnil(L);
-	return 3;
+	if (luaL_testudata(L, 1, LWS_TABLE)) {
+		lua_pushcfunction(L, lws_lua_table_pairs);
+	} else if (luaL_testudata(L, 1, LWS_YYJSON_OBJ)) {
+		lua_pushcfunction(L, lws_lua_yyjson_obj_pairs);
+	} else {
+		return luaL_argerror(L, 1, "invalid type for pairs");
+	}
+	lua_insert(L, 1);
+	lua_call(L, lua_gettop(L) - 1, LUA_MULTRET);
+	return lua_gettop(L);
+}
+
+static int lws_ipairs (lua_State *L) {
+	if (luaL_testudata(L, 1, LWS_YYJSON_ARR)) {
+		lua_pushcfunction(L, lws_lua_yyjson_arr_ipairs);
+	} else {
+		return luaL_argerror(L, 1, "invalid type for ipairs");
+	}
+	lua_insert(L, 1);
+	lua_call(L, lua_gettop(L) - 1, LUA_MULTRET);
+	return lua_gettop(L);
 }
 #endif
 
@@ -647,6 +861,7 @@ int lws_open_lws (lua_State *L) {
 		{"parseargs", lws_parseargs},
 #if LUA_VERSION_NUM < 502
 		{"pairs", lws_pairs},
+		{"ipairs", lws_ipairs},
 #endif
 		{NULL, NULL}
 	};
@@ -693,6 +908,34 @@ int lws_open_lws (lua_State *L) {
 	lua_setfield(L, -2, "__tostring");
 	lua_pushcfunction(L, lws_lua_table_gc);
 	lua_setfield(L, -2, "__gc");
+	lua_pop(L, 1);
+
+	/* yyjson */
+	luaL_newmetatable(L, LWS_YYJSON_ARR);
+	lua_pushcfunction(L, lws_lua_yyjson_arr_index);
+	lua_setfield(L, -2, "__index");
+	lua_pushcfunction(L, lws_lua_yyjson_arr_len);
+	lua_setfield(L, -2, "__len");
+#if LUA_VERSION_NUM < 503 && LUA_VERSION_NUM >= 502
+	lua_pushcfunction(L, lws_lua_yyjson_arr_ipairs);
+	lua_setfield(L, -2, "__ipairs");
+#endif	
+	lua_pushcfunction(L, lws_lua_yyjson_arr_tostring);
+	lua_setfield(L, -2, "__tostring");
+	lua_pop(L, 1);
+	luaL_newmetatable(L, LWS_YYJSON_OBJ);
+	lua_pushcfunction(L, lws_lua_yyjson_obj_index);
+	lua_setfield(L, -2, "__index");
+#if LUA_VERSION_NUM >= 502
+	lua_pushcfunction(L, lws_lua_yyjson_obj_pairs);
+	lua_setfield(L, -2, "__pairs");
+#endif
+	lua_pushcfunction(L, lws_lua_yyjson_obj_tostring);
+	lua_setfield(L, -2, "__tostring");
+	lua_pop(L, 1);
+	luaL_newmetatable(L, LWS_YYJSON_OBJ_ITER);
+	lua_pushcfunction(L, lws_lua_yyjson_obj_iter_tostring);
+	lua_setfield(L, -2, "__tostring");
 	lua_pop(L, 1);
 
 	/* HTTP response */
@@ -759,10 +1002,10 @@ int lws_traceback (lua_State *L) {
  */
 
 static void lws_push_env (lws_lua_request_ctx_t *lctx) {
-	lua_State           *L;
-	luaL_Stream         *request_body, *response_body;
-	lws_lua_table_t     *lt;
-	lws_ctx_t           *ctx;
+	lua_State        *L;
+	luaL_Stream      *request_body, *response_body;
+	lws_ctx_t        *ctx;
+	lws_lua_table_t  *lt;
 
 	/* create environment */
 	ctx = lctx->ctx;
@@ -778,7 +1021,7 @@ static void lws_push_env (lws_lua_request_ctx_t *lctx) {
 	lua_setmetatable(L, -2);
 
 	/* request */
-	lua_createtable(L, 0, 7);
+	lua_createtable(L, 0, 8);
 	lua_pushlstring(L, ctx->req_method.data, ctx->req_method.len);
 	lua_setfield(L, -2, "method");
 	lua_pushlstring(L, ctx->req_path.data, ctx->req_path.len);
@@ -797,6 +1040,15 @@ static void lws_push_env (lws_lua_request_ctx_t *lctx) {
 	lua_setfield(L, -2, "path_info");
 	lua_pushlstring(L, ctx->req_ip.data, ctx->req_ip.len);
 	lua_setfield(L, -2, "ip");
+	lua_createtable(L, 0, 2);
+	lt = lws_create_lua_table(L);
+	lt->t = ctx->headers;
+	lt->readonly = 1;  /* not strictly required, but consistent with req_headers */
+	lt->external = 1;  /* see request headers above */
+	lua_setfield(L, -2, "headers");
+	lws_lua_yyjson_push_val(L, yyjson_doc_get_root(ctx->doc));
+	lua_setfield(L, -2, "body");
+	lua_setfield(L, -2, "raw");
 	lua_setfield(L, -2, "request");
 
 	/* response */

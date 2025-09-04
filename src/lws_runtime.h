@@ -57,15 +57,12 @@ struct lws_ctx_s {
 	unsigned              state_close:1;          /* Lua state is to be closed */ 
 
 	/* Lambda request */
-	char                  header[4096];           /* header buffer (fixed) */
-	size_t                header_len;             /* header length (current) */
-	lws_str_t             request_id;             /* request ID */
+	lws_table_t          *headers;                /* request headers */
+	lws_str_t            *request_id;             /* request ID */
 	off_t                 content_length;         /* content length; -1 if not present or invalid */
 	lws_str_t             body;                   /* request body */
 	size_t                body_cap;               /* request body capacity */
 	yyjson_doc           *doc;                    /* in-place parsed request body */
-	unsigned              got_trace:1;		      /* got Lambda trace ID header */
-	unsigned              got_deadline:1;	      /* got Lambda deadline header */
 
 	/* payload request */
 	lws_str_t             req_method;             /* request method */

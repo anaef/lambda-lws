@@ -67,7 +67,7 @@ AWS Lambda documentation is found here:
 
 LWS has been tested with the following software versions:
 
-* Lua 5.4
+* Lua 5.1, 5.2, 5.3, and 5.4
 
 Your mileage may vary with other software versions.
 

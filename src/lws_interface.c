@@ -21,12 +21,10 @@
 #define LWS_CURL_OFF_T_MAX          (size_t)((curl_off_t)(~(curl_off_t)0 >> 1))
 #define LWS_CONTENT_LENGTH          "Content-Length"
 #define LWS_LAMBDA_TRACE_ID         "Lambda-Runtime-Trace-Id"
-#define LWS_LAMBDA_DEADLINE_MS      "Lambda-Runtime-Deadline-Ms"
 #define LWS_LAMBDA_REQUEST_ID       "Lambda-Runtime-Aws-Request-Id"
 #define LWS_LAMBDA_STREAMING_CT     "Content-Type: application/vnd.awslambda.http-integration-response"
 #define LWS_LAMBDA_STREAMING_MODE   "Lambda-Runtime-Function-Response-Mode: streaming"
 #define LWS_LAMBDA_TRACE_ID_ENV     "_X_AMZN_TRACE_ID"
-#define LWS_LAMBDA_DEADLINE_ENV     "_DEADLINE_MS"
 #define LWS_LAMBDA_RUNTIME_VERSION  "2018-06-01"
 #define LWS_LAMBDA_PAYLOAD_VERSION  "2.0"
 #define LWS_LAMBDA_SEPARATOR_LEN    8
@@ -152,10 +150,10 @@ static int lws_handle_socket (void *userdata, curl_socket_t fd, curlsocktype pur
 }
 
 static size_t lws_handle_header (char *buffer, size_t size, size_t nitems, void *userdata) {
-	char          *eol, *colon, *val;
-	size_t         len, remain, copy, line_len, name_len, val_len, shift;
+	char          *colon, *val;
+	size_t         len, name_len, val_len;
 	lws_ctx_t     *ctx;
-	unsigned long  ul;
+	lws_str_t      key, *value, *value_new;
 
 	/* sanity checks */
 	ctx = userdata;
@@ -164,103 +162,49 @@ static size_t lws_handle_header (char *buffer, size_t size, size_t nitems, void 
 		return 0;
 	}
 	len = size * nitems;
-	remain = len;
 
-	/* loop on input buffer */
-	while (remain > 0) {
-		copy = sizeof(ctx->header) - ctx->header_len;
-		if (copy == 0) {
-			lws_log(LWS_LOG_ERR, "single header line too large");
-			return 0;
+	/* split header */
+	colon = memchr(buffer, ':', len);
+	if (colon != NULL) {
+		name_len = colon - buffer;
+		val = colon + 1;
+		while (*val == ' ' || *val == '\t') {
+			val++;
 		}
-		if (copy > remain) {
-			copy = remain;
+		val_len = buffer + len - val;
+		while (val_len && (val[val_len - 1] == ' ' || val[val_len - 1] == '\t'
+				|| val[val_len - 1] == '\r' || val[val_len - 1] == '\n')) {
+			val_len--;
 		}
-		memcpy(ctx->header + ctx->header_len, buffer + (len - remain), copy);
-		ctx->header_len += copy;
-		remain -= copy;
-
-		/* loop on lines */
-		for (;;) {
-			eol = NULL;
-			for (line_len = 0; line_len + 1 < ctx->header_len; line_len++) {
-				if (ctx->header[line_len] == '\r' && ctx->header[line_len + 1] == '\n') {
-					eol = ctx->header + line_len;
-					break;
+		if (name_len) {
+			lws_log_debug("header name:%.*s: val:%.*s", (int)name_len, buffer, (int)val_len, val);
+			key.len = name_len;
+			key.data = buffer;
+			value = lws_table_get(ctx->headers, &key);
+			if (!value) {
+				value = lws_alloc(sizeof(lws_str_t) + val_len + 1);
+				if (!value) {
+					return 0;
 				}
+				value->len = val_len;
+				value->data = (char *)(value + 1);
+				memcpy(value->data, val, val_len);
+				value->data[val_len] = '\0';
+				lws_table_set(ctx->headers, &key, value);
+			} else {
+				value_new = lws_alloc(sizeof(lws_str_t) + value->len + 2 + val_len + 1);
+				if (!value_new) {
+					return 0;
+				}
+				value_new->len = value->len + 2 + val_len;
+				value_new->data = (char *)(value_new + 1);
+				memcpy(value_new->data, value->data, value->len);
+				value_new->data[value->len] = ',';
+				value_new->data[value->len + 1] = ' ';
+				memcpy(value_new->data + value->len + 2, val, val_len);
+				value_new->data[value_new->len] = '\0';
+				lws_table_set(ctx->headers, &key, value_new);
 			}
-			if (!eol) {
-				break;
-			}
-			colon = memchr(ctx->header, ':', line_len);
-			if (colon != NULL) {
-				name_len = colon - ctx->header;
-				while (name_len && (ctx->header[name_len - 1] == ' '
-						|| ctx->header[name_len - 1] == '\t')) {
-					name_len--;
-				}
-				val = colon + 1;
-				while ((size_t)(val - ctx->header) < line_len && (*val == ' ' || *val == '\t')) {
-					val++;
-				}
-				val_len = line_len - (val - ctx->header);
-				while (val_len && (val[val_len - 1] == ' ' || val[val_len - 1] == '\t')) {
-					val_len--;
-				}
-				switch (name_len) {
-					case sizeof(LWS_CONTENT_LENGTH) - 1:
-						if (lws_strncasecmp(ctx->header, LWS_CONTENT_LENGTH, name_len) == 0) {
-							val[val_len] = '\0';
-							errno = 0;
-							ul = strtoul(val, &eol, 10);
-							if (errno == 0 && eol == val + val_len && ul <= SSIZE_MAX) {
-								ctx->content_length = (ssize_t)ul;
-								lws_log_debug("header content_length:%zd", ctx->content_length);
-							}
-						}
-						break;
-
-					case sizeof(LWS_LAMBDA_TRACE_ID) - 1:
-						if (lws_strncasecmp(ctx->header, LWS_LAMBDA_TRACE_ID, name_len) == 0) {
-							val[val_len] = '\0';
-							if (setenv(LWS_LAMBDA_TRACE_ID_ENV, val, 1) != 0) {
-								lws_log(LWS_LOG_ERR, "failed to set " LWS_LAMBDA_TRACE_ID_ENV);
-								return 0;
-							}
-							ctx->got_trace = 1;
-							lws_log_debug("header trace_id:%s", val);
-						}
-						break;
-
-					case sizeof(LWS_LAMBDA_DEADLINE_MS) - 1:
-						if (lws_strncasecmp(ctx->header, LWS_LAMBDA_DEADLINE_MS, name_len) == 0) {
-							val[val_len] = '\0';
-							if (setenv(LWS_LAMBDA_DEADLINE_ENV, val, 1) != 0) {
-								lws_log(LWS_LOG_ERR, "failed to set " LWS_LAMBDA_DEADLINE_ENV);
-								return 0;
-							}
-							ctx->got_deadline = 1;
-							lws_log_debug("header deadline_ms:%s", val);
-						}
-						break;
-
-					case sizeof(LWS_LAMBDA_REQUEST_ID) - 1:
-						if (lws_strncasecmp(ctx->header, LWS_LAMBDA_REQUEST_ID, name_len) == 0) {
-							ctx->request_id.data = lws_alloc(val_len);
-							if (!ctx->request_id.data) {
-								return 0;
-							}
-							memcpy(ctx->request_id.data, val, val_len);
-							ctx->request_id.len = val_len;
-							lws_log_debug("header request_id:%.*s", (int)ctx->request_id.len,
-									ctx->request_id.data);
-						}
-						break;
-				}
-			}
-			shift = line_len + 2;
-			memmove(ctx->header, ctx->header + shift, ctx->header_len - shift);
-			ctx->header_len -= shift;
 		}
 	}
 	return len;
@@ -395,11 +339,12 @@ static size_t lws_handle_read (char *ptr, size_t size, size_t nmemb, void *userd
  */
 
 int lws_get_next_invocation (lws_ctx_t *ctx) {
-	char         invocation_url[256], *cookie_ptr;
-	size_t       idx, max, cookie_len, cookie_total_len;
-	lws_str_t    key, *value;
-	lws_uint_t   cookie_count;
-	yyjson_val  *root, *request_context, *http, *headers, *cookies, *val, *h_key, *h_val;
+	char           invocation_url[256], *cookie_ptr, *end;
+	size_t         idx, max, cookie_len, cookie_total_len;
+	lws_str_t      key, *value;
+	lws_uint_t     cookie_count;
+	yyjson_val    *root, *request_context, *http, *headers, *cookies, *val, *h_key, *h_val;
+	unsigned long  ul;
 
 	/* prepare invocation URL */
 	snprintf(invocation_url, sizeof(invocation_url), "http://%.*s/%s/runtime/invocation/next",
@@ -420,37 +365,57 @@ int lws_get_next_invocation (lws_ctx_t *ctx) {
 		return -1;
 	}
 	in_poll = 0;
-	if (!ctx->request_id.len) {
+
+	/* request ID */
+	lws_str_set(&key, LWS_LAMBDA_REQUEST_ID);
+	ctx->request_id = lws_table_get(ctx->headers, &key);
+	if (!ctx->request_id) {
 		lws_log(LWS_LOG_CRIT, "missing request ID header");
 		return -1;
 	}
 
-	/* clear env if we didn't get the corresponding headers */
-	if (!ctx->got_trace) {
+	/* content length */
+	lws_str_set(&key, LWS_CONTENT_LENGTH);
+	value = lws_table_get(ctx->headers, &key);
+	if (value) {
+		errno = 0;
+		ul = strtoul(value->data, &end, 10);
+		if (errno == 0 && end == value->data + value->len && ul <= LWS_CURL_OFF_T_MAX) {
+			ctx->content_length = (off_t)ul;
+		} else {
+			ctx->content_length = -1;
+		}
+	} else {
+		ctx->content_length = -1;
+	}
+
+	/* trace ID */
+	lws_str_set(&key, LWS_LAMBDA_TRACE_ID);
+	value = lws_table_get(ctx->headers, &key);
+	if (value) {
+		if (setenv(LWS_LAMBDA_TRACE_ID_ENV, value->data, 1) != 0) {
+			lws_log(LWS_LOG_ERR, "failed to set " LWS_LAMBDA_TRACE_ID_ENV);
+			return -1;
+		}
+	} else {
 		if (unsetenv(LWS_LAMBDA_TRACE_ID_ENV) != 0) {
 			lws_log(LWS_LOG_ERR, "failed to clear " LWS_LAMBDA_TRACE_ID_ENV);
 			return -1;
 		}
 	}
-	if (!ctx->got_deadline) {
-		if (unsetenv(LWS_LAMBDA_DEADLINE_ENV) != 0) {
-			lws_log(LWS_LOG_ERR, "failed to clear " LWS_LAMBDA_DEADLINE_ENV);
-			return -1;
-		}
+
+	/* parse inplace */
+	lws_memzero(ctx->body.data + ctx->body.len, YYJSON_PADDING_SIZE);
+	ctx->doc = yyjson_read_opts(ctx->body.data, ctx->body.len, YYJSON_READ_INSITU, NULL, NULL);
+	if (!ctx->doc) {
+		lws_log(LWS_LOG_ERR, "failed to parse request body as JSON");
+		return -1;
 	}
 
 	/* handle regular and raw mode */
 	if (!ctx->raw) {
 		/* regular mode */
 	
-		/* parse inplace */
-		memset(ctx->body.data + ctx->body.len, 0, YYJSON_PADDING_SIZE);
-		ctx->doc = yyjson_read_opts(ctx->body.data, ctx->body.len, YYJSON_READ_INSITU, NULL, NULL);
-		if (!ctx->doc) {
-			lws_log(LWS_LOG_ERR, "failed to parse request body as JSON");
-			return -1;
-		}
-
 		/* version */
 		root = yyjson_doc_get_root(ctx->doc);
 		if (!root) {
@@ -628,7 +593,7 @@ int lws_get_next_invocation (lws_ctx_t *ctx) {
 		}
 	} else {
 		/* raw mode */
-		ctx->req_body = ctx->body;
+		lws_str_set(&ctx->req_body, "");
 	}
 
 	return 0;
@@ -742,8 +707,8 @@ int lws_post_response (lws_ctx_t *ctx) {
 	/* prepare response URL */
 	snprintf(response_url, sizeof(response_url),
 			"http://%.*s/%s/runtime/invocation/%.*s/response", (int)ctx->runtime_api.len,
-			ctx->runtime_api.data, LWS_LAMBDA_RUNTIME_VERSION, (int)ctx->request_id.len,
-			ctx->request_id.data);
+			ctx->runtime_api.data, LWS_LAMBDA_RUNTIME_VERSION, (int)ctx->request_id->len,
+			ctx->request_id->data);
 
 	/* prepare Lambda headers */
 	curl_headers = curl_slist_append(curl_headers, "Content-Type: application/json");
@@ -897,8 +862,8 @@ int lws_stream_response (lws_ctx_t *ctx, int finish) {
 	/* prepare response URL */
 	snprintf(response_url, sizeof(response_url),
 			"http://%.*s/%s/runtime/invocation/%.*s/response", (int)ctx->runtime_api.len,
-			ctx->runtime_api.data, LWS_LAMBDA_RUNTIME_VERSION, (int)ctx->request_id.len,
-			ctx->request_id.data);
+			ctx->runtime_api.data, LWS_LAMBDA_RUNTIME_VERSION, (int)ctx->request_id->len,
+			ctx->request_id->data);
 
 	/* prepare Lambda headers */
 	curl_headers = curl_slist_append(curl_headers, LWS_LAMBDA_STREAMING_CT);
@@ -976,16 +941,15 @@ int lws_post_error (lws_ctx_t *ctx, const char *error_message) {
 	struct curl_slist  *curl_headers;
 
 	/* log error, prepare error url */
-	if (!ctx->request_id.len) {
+	if (!ctx->request_id) {
 		lws_log(LWS_LOG_EMERG, "initialization error msg:%s", error_message);
 		snprintf(error_url, sizeof(error_url), "http://%.*s/%s/runtime/init/error",
 				(int)ctx->runtime_api.len, ctx->runtime_api.data, LWS_LAMBDA_RUNTIME_VERSION);
 	} else {
 		lws_log(LWS_LOG_ERR, "request error msg:%s", error_message);
-		snprintf(error_url, sizeof(error_url),
-				"http://%.*s/%s/runtime/invocation/%.*s/error", (int)ctx->runtime_api.len,
-				ctx->runtime_api.data, LWS_LAMBDA_RUNTIME_VERSION, (int)ctx->request_id.len,
-				ctx->request_id.data);
+		snprintf(error_url, sizeof(error_url), "http://%.*s/%s/runtime/invocation/%.*s/error",
+				(int)ctx->runtime_api.len, ctx->runtime_api.data, LWS_LAMBDA_RUNTIME_VERSION,
+				(int)ctx->request_id->len, ctx->request_id->data);
 	}
 
 	/* init state */
