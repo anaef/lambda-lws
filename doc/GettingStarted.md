@@ -123,8 +123,8 @@ After the function is successfully deployed, you can use `curl` to send requests
 URLs, for example:
 
 ```sh
-curl https://{your_buffered_function_url}/echo/hello?param1=arg1
-curl https://{your_stream_function_url}/stream
+curl {your_buffered_function_url}/echo/hello?param1=arg1
+curl {your_stream_function_url}/stream
 ```
 
 > [!TIP]
