@@ -1,7 +1,7 @@
 # LWS for AWS Lambda Release Notes
 
 
-## Release 0.9.1 beta
+## Release 0.9.1 beta (2025-09-04)
 
 - Add raw headers and body.
 - Remove `_DEADLINE_MS` environment variable (now accessible in raw headers).
