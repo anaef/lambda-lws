@@ -1,7 +1,7 @@
 /*
  * LWS codec
  *
- * Copyright (C) 2025 Andre Naef
+ * Copyright (C) 2025, 2026 Andre Naef
  */
 
 
@@ -32,7 +32,7 @@ static const uint8_t b64_dec_tbl[256] = {
 	41  ,42  ,43  ,44  ,45  ,46  ,47  ,48  ,49  ,50  ,51  ,0x80,0x80,0x80,0x80,0x80, /* 0x70-0x7F */ 
 	[0x80 ... 0xFF] = 0x80                                                           /* 0x80-0xFF */ 
 };
-static const char b64_enc_tbl[64] =
+static const char b64_enc_tbl[] =
 		"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
 /*

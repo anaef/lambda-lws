@@ -1,6 +1,11 @@
 # LWS for AWS Lambda Release Notes
 
 
+## Release 0.9.2 beta
+
+- Fix build compatibility with GCC 15.
+
+
 ## Release 0.9.1 beta (2025-09-04)
 
 - Add raw headers and body.
