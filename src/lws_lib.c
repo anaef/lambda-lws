@@ -62,7 +62,7 @@ static int lws_lua_table_gc(lua_State *L);
 
 /* yyjson */
 static int lws_lua_yyjson_push_val(lua_State *L, yyjson_val *v);
-static lws_lua_yyjson_val_t *lws_create_lua_yyjson_val(lua_State *L, const char *name);
+static yyjson_val *lws_lua_yyjson_arr_get(lws_lua_yyjson_arr_t *larr, size_t index);
 static int lws_lua_yyjson_arr_index(lua_State *L);
 static int lws_lua_yyjson_arr_len(lua_State *L);
 #if LUA_VERSION_NUM < 503
@@ -386,8 +386,9 @@ static int lws_lua_table_gc (lua_State *L) {
 
 static int lws_lua_yyjson_push_val (lua_State *L, yyjson_val *v) {
 	size_t                len;
-	const char           *s;
-	lws_lua_yyjson_val_t  *val;
+	const char            *s;
+	lws_lua_yyjson_arr_t  *larr;
+	lws_lua_yyjson_obj_t  *lobj;
 
 	/* no value? */
 	if (!v) {
@@ -421,13 +422,19 @@ static int lws_lua_yyjson_push_val (lua_State *L, yyjson_val *v) {
 		break;
 
 	case YYJSON_TYPE_ARR:
-		val = lws_create_lua_yyjson_val(L, LWS_YYJSON_ARR);
-		val->v = v;
+		larr = lua_newuserdata(L, sizeof(lws_lua_yyjson_arr_t));
+		larr->v = v;
+		larr->iter = yyjson_arr_iter_with(v);
+		luaL_getmetatable(L, LWS_YYJSON_ARR);
+		lua_setmetatable(L, -2);
 		break;
 
 	case YYJSON_TYPE_OBJ:
-		val = lws_create_lua_yyjson_val(L, LWS_YYJSON_OBJ);
-		val->v = v;
+		lobj = lua_newuserdata(L, sizeof(lws_lua_yyjson_obj_t));
+		lws_memzero(lobj, sizeof(lws_lua_yyjson_obj_t));
+		lobj->v = v;
+		luaL_getmetatable(L, LWS_YYJSON_OBJ);
+		lua_setmetatable(L, -2);
 		break;
 
 	default:
@@ -436,36 +443,41 @@ static int lws_lua_yyjson_push_val (lua_State *L, yyjson_val *v) {
 	return 1;
 }
 
-static lws_lua_yyjson_val_t *lws_create_lua_yyjson_val (lua_State *L, const char *name) {
-	lws_lua_yyjson_val_t  *lval;
+static yyjson_val *lws_lua_yyjson_arr_get (lws_lua_yyjson_arr_t *larr, size_t index) {
+	yyjson_val  *v;
 
-	lval = lua_newuserdata(L, sizeof(lws_lua_yyjson_val_t));
-	lws_memzero(lval, sizeof(lws_lua_yyjson_val_t));
-	luaL_getmetatable(L, name);
-	lua_setmetatable(L, -2);
-	return lval;
+	if (index == 0 && larr->iter.idx != 0) {
+		(void)yyjson_arr_iter_init(larr->v, &larr->iter);
+	}
+	if (index == larr->iter.idx) {
+		v = yyjson_arr_iter_next(&larr->iter);
+		if (v) {
+			return v;
+		}
+	}
+	return yyjson_arr_get(larr->v, index);
 }
 
 static int lws_lua_yyjson_arr_index (lua_State *L) {
 	int                    isnum;
 	lua_Integer            index;
-	lws_lua_yyjson_val_t  *lval;
+	lws_lua_yyjson_arr_t  *larr;
 
-	lval = luaL_checkudata(L, 1, LWS_YYJSON_ARR);
+	larr = luaL_checkudata(L, 1, LWS_YYJSON_ARR);
 	index = lua_tointegerx(L, 2, &isnum);
 	if (!isnum || index < 1 || (uintmax_t)index > SIZE_MAX) {
 		lua_pushnil(L);
 		return 1;
 	}
-	return lws_lua_yyjson_push_val(L, yyjson_arr_get(lval->v, (size_t)(index - 1)));
+	return lws_lua_yyjson_push_val(L, lws_lua_yyjson_arr_get(larr, (size_t)(index - 1)));
 }
 
 static int lws_lua_yyjson_arr_len (lua_State *L) {
 	size_t                 len;
-	lws_lua_yyjson_val_t  *lval;
+	lws_lua_yyjson_arr_t  *larr;
 
-	lval = luaL_checkudata(L, 1, LWS_YYJSON_ARR);
-	len = yyjson_arr_size(lval->v);
+	larr = luaL_checkudata(L, 1, LWS_YYJSON_ARR);
+	len = yyjson_arr_size(larr->v);
 	lua_pushinteger(L, len <= LUA_MAXINTEGER ? (lua_Integer)len : LUA_MAXINTEGER);
 	return 1;
 }
@@ -473,16 +485,16 @@ static int lws_lua_yyjson_arr_len (lua_State *L) {
 #if LUA_VERSION_NUM < 503
 static int lws_lua_yyjson_arr_next (lua_State *L) {
 	lua_Integer            index;
-	lws_lua_yyjson_val_t  *lval;
+	lws_lua_yyjson_arr_t  *larr;
 
-	lval = luaL_checkudata(L, 1, LWS_YYJSON_ARR);
+	larr = luaL_checkudata(L, 1, LWS_YYJSON_ARR);
 	index = luaL_checkinteger(L, 2);
 	index++;
-	if (index < 1 || (size_t)index > yyjson_arr_size(lval->v)) {
+	if (index < 1 || (size_t)index > yyjson_arr_size(larr->v)) {
 		return 0;
 	}
 	lua_pushinteger(L, index);
-	(void)lws_lua_yyjson_push_val(L, yyjson_arr_get(lval->v, (size_t)(index - 1)));
+	(void)lws_lua_yyjson_push_val(L, lws_lua_yyjson_arr_get(larr, (size_t)(index - 1)));
 	return 2;
 }
 
@@ -496,24 +508,24 @@ static int lws_lua_yyjson_arr_ipairs (lua_State *L) {
 #endif
 
 static int lws_lua_yyjson_arr_tostring (lua_State *L) {
-	lws_lua_yyjson_val_t  *lval;
+	lws_lua_yyjson_arr_t  *larr;
 
-	lval = luaL_checkudata(L, 1, LWS_YYJSON_ARR);
-	lua_pushfstring(L, LWS_YYJSON_ARR ": %p", lval->v);
+	larr = luaL_checkudata(L, 1, LWS_YYJSON_ARR);
+	lua_pushfstring(L, LWS_YYJSON_ARR ": %p", larr->v);
 	return 1;
 }
 
 static int lws_lua_yyjson_obj_index (lua_State *L) {
 	lws_str_t              key;
-	lws_lua_yyjson_val_t  *lval;
+	lws_lua_yyjson_obj_t  *lobj;
 
-	lval = luaL_checkudata(L, 1, LWS_YYJSON_OBJ);
+	lobj = luaL_checkudata(L, 1, LWS_YYJSON_OBJ);
 	if (!lua_isstring(L, 2)) {
 		lua_pushnil(L);
 		return 1;
 	}
 	key.data = (char *)lua_tolstring(L, 2, &key.len);
-	return lws_lua_yyjson_push_val(L, yyjson_obj_getn(lval->v, key.data, key.len));
+	return lws_lua_yyjson_push_val(L, yyjson_obj_getn(lobj->v, key.data, key.len));
 }
 
 static int lws_lua_yyjson_obj_next (lua_State *L) {
@@ -532,13 +544,13 @@ static int lws_lua_yyjson_obj_next (lua_State *L) {
 }
 
 static int lws_lua_yyjson_obj_pairs (lua_State *L) {
-	lws_lua_yyjson_val_t       *lval;
+	lws_lua_yyjson_obj_t       *lobj;
 	lws_lua_yyjson_obj_iter_t  *liter;
 
-	lval = luaL_checkudata(L, 1, LWS_YYJSON_OBJ);
+	lobj = luaL_checkudata(L, 1, LWS_YYJSON_OBJ);
 	lua_pushcfunction(L, lws_lua_yyjson_obj_next);
 	liter = lua_newuserdata(L, sizeof(lws_lua_yyjson_obj_iter_t));
-	liter->iter = yyjson_obj_iter_with(lval->v);
+	liter->iter = yyjson_obj_iter_with(lobj->v);
 	luaL_getmetatable(L, LWS_YYJSON_OBJ_ITER);
 	lua_setmetatable(L, -2);
 	lua_pushboolean(L, 1);
@@ -546,10 +558,10 @@ static int lws_lua_yyjson_obj_pairs (lua_State *L) {
 }
 
 static int lws_lua_yyjson_obj_tostring (lua_State *L) {
-	lws_lua_yyjson_val_t  *lval;
+	lws_lua_yyjson_obj_t  *lobj;
 
-	lval = luaL_checkudata(L, 1, LWS_YYJSON_OBJ);
-	lua_pushfstring(L, LWS_YYJSON_OBJ ": %p", lval->v);
+	lobj = luaL_checkudata(L, 1, LWS_YYJSON_OBJ);
+	lua_pushfstring(L, LWS_YYJSON_OBJ ": %p", lobj->v);
 	return 1;
 }
 

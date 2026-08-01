@@ -1,7 +1,7 @@
 /*
  * LWS library
  *
- * Copyright (C) 2023,2025 Andre Naef
+ * Copyright (C) 2023-2026 Andre Naef
  */
 
 
@@ -27,7 +27,8 @@
 
 typedef struct lws_lua_request_ctx_s lws_lua_request_ctx_t;
 typedef struct lws_lua_table_s lws_lua_table_t;
-typedef struct lws_lua_yyjson_val_s lws_lua_yyjson_val_t;
+typedef struct lws_lua_yyjson_arr_s lws_lua_yyjson_arr_t;
+typedef struct lws_lua_yyjson_obj_s lws_lua_yyjson_obj_t;
 typedef struct lws_lua_yyjson_obj_iter_s lws_lua_yyjson_obj_iter_t;
 
 typedef enum {
@@ -51,7 +52,12 @@ struct lws_lua_table_s {
 	unsigned      external:1;  /* managed externally */
 };
 
-struct lws_lua_yyjson_val_s {
+struct lws_lua_yyjson_arr_s {
+	yyjson_val       *v;     /* yyjson value */
+	yyjson_arr_iter   iter;  /* yyjson array iterator */
+};
+
+struct lws_lua_yyjson_obj_s {
 	yyjson_val  *v;  /* yyjson value */
 };
 

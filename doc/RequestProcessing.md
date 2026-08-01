@@ -167,9 +167,9 @@ custom runtime supplies `null` as the response body.
 
 > [!CAUTION]
 > Indexed access to *non-flat* raw JSON arrays, such as the `Records` arrays in certain AWS event
-> payloads, can take linear time in yyjson's in-memory representation. Iteration by index, including
-> with `ipairs`, is not presently optimized and can take quadratic time. Therefore, operators must
-> enforce appropriate resource limits for raw event processing.
+> payloads, can take linear time in yyjson's in-memory representation. Therefore, operators must
+> enforce appropriate resource limits for raw event processing. Iteration with `ipairs` has been
+> optimized to take linear time overall.
 
 
 ## Lifecycle of the Lua State

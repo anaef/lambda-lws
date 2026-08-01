@@ -14,6 +14,7 @@
 - Harden query argument parsing with a configurable field limit defaulting to 255.
 - Clear request environments from cached Lua chunks after execution.
 - Harden raw JSON array access for invalid indices.
+- Optimize raw JSON array iteration and document non-flat array performance.
 
 
 ## Release 0.9.1 beta (2025-09-04)
