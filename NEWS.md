@@ -4,6 +4,7 @@
 ## Release 0.9.2 beta
 
 - Add DevContainer.
+- Add security posture.
 - Fix build compatibility with GCC 15.
 
 
