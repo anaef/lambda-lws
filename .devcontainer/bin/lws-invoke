@@ -1,0 +1,123 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+source "${script_dir}/../lib/lws-common.sh"
+
+if [[ $# -gt 1 ]] || ! mode="$(lws_mode "${1:-}")"; then
+	lws_usage_mode "lws-invoke"
+	exit 2
+fi
+
+normal_service="$(lws_service "${mode}")"
+valgrind_service="$(lws_service "${mode}" valgrind)"
+running_services="$(lws_running_services)"
+
+if grep -Fxq "${normal_service}" <<<"${running_services}"; then
+	service="${normal_service}"
+elif grep -Fxq "${valgrind_service}" <<<"${running_services}"; then
+	service="${valgrind_service}"
+else
+	echo "No ${mode} Lambda LWS runtime is running." >&2
+	echo "Start one with: lws-run ${mode}" >&2
+	echo "Or under Valgrind: lws-valgrind ${mode}" >&2
+	exit 1
+fi
+
+lws_wait_for_runtime "${service}"
+invoke_url="$(lws_runtime_url)/2015-03-31/functions/function/invocations"
+
+invoke() {
+	local filter="${1:-.}"
+
+	curl \
+		--fail-with-body \
+		--silent \
+		--show-error \
+		--request POST \
+		--header "Content-Type: application/json" \
+		--data-binary @- \
+		"${invoke_url}" | jq --raw-output "${filter}"
+}
+
+invoke_streaming() {
+	local output_file status
+
+	output_file="$(mktemp)"
+	if curl \
+			--fail-with-body \
+			--silent \
+			--show-error \
+			--request POST \
+			--header "Content-Type: application/json" \
+			--data-binary @- \
+			--output "${output_file}" \
+			"${invoke_url}"; then
+		status=0
+		printf 'Streaming response (hexadecimal):\n'
+		od -An -tx1 -v "${output_file}"
+	else
+		status=$?
+	fi
+
+	rm -f "${output_file}"
+	return "${status}"
+}
+
+if [[ "${mode}" == "default" ]]; then
+	invoke '., "\nResponse body:", .body' <<'EOF'
+{
+  "version": "2.0",
+  "rawPath": "/echo/hello",
+  "rawQueryString": "param1=arg1",
+  "cookies": [
+    "cookie1=value1",
+    "cookie2=value2"
+  ],
+  "headers": {
+    "Content-Type": "application/json"
+  },
+  "requestContext": {
+    "http": {
+      "method": "POST",
+      "path": "/echo/hello",
+      "protocol": "HTTP/1.1",
+      "sourceIp": "1.2.3.4"
+    }
+  },
+  "body": "{\"key\": \"value\"}",
+  "isBase64Encoded": false
+}
+EOF
+
+	invoke_streaming <<'EOF'
+{
+  "version": "2.0",
+  "rawPath": "/stream",
+  "headers": {
+  },
+  "requestContext": {
+    "http": {
+      "method": "GET",
+      "path": "/stream",
+      "protocol": "HTTP/1.1",
+      "sourceIp": "1.2.3.4"
+    }
+  },
+  "isBase64Encoded": false
+}
+EOF
+else
+	invoke <<'EOF'
+{
+  "event": "some-event",
+  "confirm": true
+}
+EOF
+
+	invoke <<'EOF'
+{
+  "event": "some-event"
+}
+EOF
+fi

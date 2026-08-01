@@ -1,0 +1,22 @@
+ARG BUILD_IMAGE=lambda-lws/build-env:latest
+ARG EXAMPLE_IMAGE=lambda-lws/lambda-lws-examples-default:latest
+
+FROM ${BUILD_IMAGE} AS build-env-valgrind
+
+ARG LUA_ABI
+RUN make clean \
+	&& make LUA_ABI=${LUA_ABI} \
+		MYCFLAGS="-O0 -g3 -fno-omit-frame-pointer -DLWS_DEBUG=1"
+
+
+FROM ${EXAMPLE_IMAGE} AS lambda-lws-valgrind
+
+RUN microdnf -y install valgrind \
+	&& microdnf clean all
+
+COPY --from=build-env-valgrind /build/bootstrap/bootstrap /var/runtime/bootstrap.valgrind
+COPY .devcontainer/valgrind-bootstrap.sh /var/runtime/bootstrap
+RUN chmod 0755 /var/runtime/bootstrap /var/runtime/bootstrap.valgrind
+
+ENV LWS_LOG_LEVEL=DEBUG \
+	LWS_LOG_TEXT=on

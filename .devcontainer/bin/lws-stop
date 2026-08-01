@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+source "${script_dir}/../lib/lws-common.sh"
+
+if [[ $# -ne 0 ]]; then
+	echo "Usage: lws-stop" >&2
+	exit 2
+fi
+
+if [[ -z "$(lws_running_services)" ]]; then
+	echo "No Lambda LWS runtime is running."
+	exit 0
+fi
+
+lws_finalize_valgrind_runtimes
+lws_compose stop
+echo "Lambda LWS runtime stopped."

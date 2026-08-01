@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+source "${script_dir}/../lib/lws-common.sh"
+
+if [[ $# -ne 0 ]]; then
+	echo "Usage: lws-build" >&2
+	exit 2
+fi
+
+lua_abi="${LUA_ABI:-5.4}"
+debug_flags="-O0 -g3 -fno-omit-frame-pointer -DLWS_DEBUG=1"
+
+echo "Building Lambda LWS with Lua ${lua_abi} and debug symbols..."
+make -C "${LWS_WORKSPACE}" clean
+make -C "${LWS_WORKSPACE}" -j"$(nproc)" \
+	LUA_ABI="${lua_abi}" \
+	MYCFLAGS="${debug_flags}"

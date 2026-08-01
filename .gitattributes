@@ -1,0 +1,4 @@
+/bin/* text eol=lf
+/.devcontainer/bin/* text eol=lf
+/.devcontainer/*.sh text eol=lf
+/.devcontainer/lib/*.sh text eol=lf

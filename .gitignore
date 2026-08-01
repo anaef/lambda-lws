@@ -3,3 +3,4 @@
 .env
 *.o
 bootstrap
+/test_codec

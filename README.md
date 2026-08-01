@@ -55,6 +55,9 @@ Please see the [release notes](NEWS.md) document.
 
 Please browse the extensive documentation in the [doc](doc) folder.
 
+For Linux development, local Lambda image testing, and Valgrind, see the
+[development container documentation](.devcontainer/README.md).
+
 AWS Lambda documentation is found here:
 
 * [Developer Guide](https://docs.aws.amazon.com/lambda/latest/dg/welcome.html)

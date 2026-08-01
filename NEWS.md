@@ -3,6 +3,7 @@
 
 ## Release 0.9.2 beta
 
+- Add DevContainer.
 - Fix build compatibility with GCC 15.
 
 

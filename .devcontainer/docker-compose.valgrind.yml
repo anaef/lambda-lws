@@ -1,0 +1,28 @@
+services:
+  lambda-lws-examples-default-valgrind:
+    build:
+      context: .
+      dockerfile: .devcontainer/Dockerfile.valgrind
+      target: lambda-lws-valgrind
+      args:
+        BUILD_IMAGE: lambda-lws/build-env:latest
+        EXAMPLE_IMAGE: lambda-lws/lambda-lws-examples-default:latest
+        LUA_ABI: ${LUA_ABI}
+    image: lambda-lws/lambda-lws-examples-default-valgrind:latest
+    restart: no
+    ports:
+      - "127.0.0.1:${LWS_PORT:-8080}:8080"
+
+  lambda-lws-examples-raw-valgrind:
+    build:
+      context: .
+      dockerfile: .devcontainer/Dockerfile.valgrind
+      target: lambda-lws-valgrind
+      args:
+        BUILD_IMAGE: lambda-lws/build-env:latest
+        EXAMPLE_IMAGE: lambda-lws/lambda-lws-examples-raw:latest
+        LUA_ABI: ${LUA_ABI}
+    image: lambda-lws/lambda-lws-examples-raw-valgrind:latest
+    restart: no
+    ports:
+      - "127.0.0.1:${LWS_PORT:-8080}:8080"

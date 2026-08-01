@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+source "${script_dir}/../lib/lws-common.sh"
+
+if [[ $# -gt 1 ]] || ! mode="$(lws_mode "${1:-}")"; then
+	lws_usage_mode "lws-run"
+	exit 2
+fi
+
+lws_require_env
+service="$(lws_service "${mode}")"
+
+lws_compose down --remove-orphans
+echo "Building and starting ${service} at $(lws_browser_url)."
+echo "From another terminal, run: lws-invoke ${mode}"
+echo "When finished, run lws-stop from the other terminal."
+lws_compose up --build "${service}"

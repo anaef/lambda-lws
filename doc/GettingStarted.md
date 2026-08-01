@@ -35,6 +35,7 @@ the following environment variables which can be set in a `.env` file:
 | LUA_ABI           | Lua ABI version                  | 5.4              |
 | LUAROCKS_VERSION  | LuaRocks version                 | 3.12.2           |
 | LUAROCKS          | Lua rocks required at runtime    | lua-tz luaposix  |
+| LWS_PORT          | Host port for local RIE testing  | 8080             |
 
 
 ### Web Service Examples
@@ -79,15 +80,14 @@ documentation.
 
 ## Running and Testing the Examples Locally
 
-The `bin` directory contains the scripts `run-default`, `test-default`, `run-raw`, and
-`test-raw`. The run scripts build and run the corresponding Docker service locally using the
-Runtime Interface Emulator (RIE). The test scripts use `curl` to send example requests to the
-running service.
+For the complete local development and testing workflow, including native builds, the Runtime
+Interface Emulator (RIE), and Valgrind, see the
+[development container documentation](../.devcontainer/README.md).
 
 > [!TIP]
-> Before using these scripts, ensure that your `.env` file is correctly configured. You can copy
-> the provided `.env.defaults` file to create your own `.env` file and adjust the settings as
-> needed.
+> Before using the local Docker commands, ensure that your `.env` file is correctly configured.
+> You can copy the provided `.env.defaults` file to create your own `.env` file and adjust the
+> settings as needed.
 
 > [!NOTE]
 > When testing with the RIE, you will not see the ultimate HTTP response but its wrapping in the

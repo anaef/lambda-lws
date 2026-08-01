@@ -43,7 +43,7 @@ services:
     image: lambda-lws/lambda-lws-examples-default:latest
     restart: no
     ports:
-      - "8080:8080"
+      - "127.0.0.1:${LWS_PORT:-8080}:8080"
 
   lambda-lws-examples-raw:
     build:
@@ -60,4 +60,4 @@ services:
     image: lambda-lws/lambda-lws-examples-raw:latest
     restart: no
     ports:
-      - "8080:8080"
+      - "127.0.0.1:${LWS_PORT:-8080}:8080"

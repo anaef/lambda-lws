@@ -24,7 +24,9 @@ RUN git clone --branch 0.12.0 --depth 1 https://github.com/ibireme/yyjson.git \
 RUN curl -R -O https://www.lua.org/ftp/lua-${LUA_VERSION}.tar.gz \
 	&& tar xzf lua-${LUA_VERSION}.tar.gz \
 	&& cd lua-${LUA_VERSION} \
-	&& make linux CC="gcc -fPIC" \
+	&& lua_cflags="-fPIC -DLUA_USE_POSIX -DLUA_USE_DLOPEN" \
+	&& lua_cflags="${lua_cflags} -DLUA_USE_STRTODHEX -DLUA_USE_AFORMAT -DLUA_USE_LONGLONG" \
+	&& make -C src all MYCFLAGS="${lua_cflags}" MYLIBS="-Wl,-E -ldl" \
 	&& make INSTALL_TOP=/usr/local install \
 	&& cd src \
 	&& rm -f lua.o luac.o \
@@ -64,13 +66,6 @@ ENV LUA_CPATH="/usr/local/lib/lua/${LUA_ABI}/?.so"
 COPY --from=build-env /build/bootstrap/bootstrap /var/runtime/bootstrap
 
 RUN [ -z "${PACKAGES_RUN}" ] || microdnf -y install ${PACKAGES_RUN} && microdnf clean all
-
-# RUN microdnf -y install valgrind \
-# 	&& mv /var/runtime/bootstrap /var/runtime/bootstrap0 \
-# 	&& echo '#!/bin/bash' > /var/runtime/bootstrap \
-# 	&& echo 'valgrind --tool=memcheck --leak-check=full --track-origins=yes --read-var-info=yes --error-exitcode=1 /var/runtime/bootstrap0 "$@"' >> /var/runtime/bootstrap \
-# 	&& chmod +x /var/runtime/bootstrap \
-# 	&& microdnf clean all
 
 
 # lambda-lws-examples-default

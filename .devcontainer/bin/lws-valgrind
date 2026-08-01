@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+source "${script_dir}/../lib/lws-common.sh"
+
+if [[ $# -gt 1 ]] || ! mode="$(lws_mode "${1:-}")"; then
+	lws_usage_mode "lws-valgrind"
+	exit 2
+fi
+
+lws_require_env
+service="$(lws_service "${mode}" valgrind)"
+example_service="$(lws_service "${mode}")"
+log_dir="${LWS_VALGRIND_LOG_DIR:-/tmp/lambda-lws}"
+log_file="${log_dir}/valgrind-${mode}.log"
+mkdir -p "${log_dir}"
+
+echo "Building ${example_service} from the deployment Dockerfile..."
+lws_compose down --remove-orphans
+lws_compose build build-env "${example_service}"
+
+echo "Building the development-only ${service} image..."
+lws_compose build "${service}"
+
+echo "Starting ${service} under Valgrind at $(lws_browser_url)."
+echo "From another terminal, run: lws-invoke ${mode}"
+echo "When finished, run lws-stop or press Ctrl-C here."
+
+interrupted=false
+trap 'interrupted=true' INT TERM
+
+lws_compose up --detach "${service}"
+if ! lws_wait_for_runtime "${service}"; then
+	lws_compose down --remove-orphans
+	exit 1
+fi
+
+set +e
+lws_compose logs --follow "${service}"
+logs_result=$?
+set -e
+
+trap - INT TERM
+
+if ${interrupted} && lws_running_services | grep -Fxq "${service}"; then
+	lws_finalize_valgrind_runtimes
+	lws_compose stop "${service}"
+fi
+
+container_id="$(lws_compose ps --all --quiet "${service}")"
+container_result=""
+if [[ -n "${container_id}" ]]; then
+	container_result="$(docker inspect --format '{{.State.ExitCode}}' "${container_id}")"
+fi
+
+lws_compose logs --no-color "${service}" > "${log_file}" 2>&1 || true
+lws_compose down --remove-orphans
+
+result=0
+if [[ "${container_result}" == "99" ]]; then
+	result=1
+fi
+if grep -Eq 'ERROR SUMMARY: [1-9][0-9]* errors' "${log_file}"; then
+	result=1
+fi
+if ! grep -Eq 'ERROR SUMMARY: [0-9]+ errors' "${log_file}"; then
+	echo "Valgrind did not produce a complete report." >&2
+	result=1
+fi
+if [[ ${logs_result} -ne 0 && ${logs_result} -ne 130 ]] && ! ${interrupted}; then
+	result=1
+fi
+
+if [[ ${result} -ne 0 ]]; then
+	echo "Valgrind reported a failure. Report: ${log_file}" >&2
+	exit "${result}"
+fi
+
+echo "Valgrind completed without reported errors."
+echo "Report: ${log_file}"
