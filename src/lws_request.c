@@ -313,6 +313,9 @@ int lws_error_response (lws_ctx_t *ctx, int code) {
 	rc = -1;
 	doc = NULL;
 
+	/* set status code */
+	ctx->resp_status = code;
+
 	/* check response body file and truncate */
 	if (!ctx->resp_body_file) {
 		lws_log(LWS_LOG_CRIT, "response body file not initialized");

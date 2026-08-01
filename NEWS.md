@@ -9,6 +9,7 @@
 - Fix table use-after-free and duplicate-key allocation failure.
 - Harden table options and hashing.
 - Fix zero-capture LWS_MATCH expressions allowing nonmatching request paths.
+- Fix HTTP status of generated error responses.
 
 
 ## Release 0.9.1 beta (2025-09-04)
