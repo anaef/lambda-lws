@@ -1,7 +1,7 @@
 /*
  * LWS table
  *
- * Copyright (C) 2023,2025 Andre Naef
+ * Copyright (C) 2023-2026 Andre Naef
  */
 
 
@@ -96,7 +96,7 @@ int lws_table_set_dup (lws_table_t *t, int dup) {
 	if (t->count) {
 		return -1;
 	}
-	t->dup = dup;
+	t->dup = !!dup;
 	return 0;
 }
 
@@ -104,7 +104,7 @@ int lws_table_set_free (lws_table_t *t, int free) {
 	if (t->count) {
 		return -1;
 	}
-	t->free = free;
+	t->free = !!free;
 	return 0;
 }
 
@@ -112,7 +112,7 @@ int lws_table_set_ci (lws_table_t *t, int ci) {
 	if (t->count) {
 		return -1;
 	}
-	t->ci = ci;
+	t->ci = !!ci;
 	return 0;
 }
 
@@ -158,6 +158,7 @@ void *lws_table_get (lws_table_t *t, lws_str_t *key) {
 int lws_table_set (lws_table_t *t, lws_str_t *key, void *value) {
 	lws_uint_t          hash;
 	lws_queue_t        *q;
+	lws_str_t           entry_key;
 	lws_table_entry_t  *entry, *evict;
 
 	hash = lws_table_hash(t, key);
@@ -189,17 +190,18 @@ int lws_table_set (lws_table_t *t, lws_str_t *key, void *value) {
 			}
 
 			/* new entry */
-			entry = lws_table_insert(t, key, hash);
 			if (t->dup) {
-				entry->key.data = lws_alloc(key->len);
-				if (!entry->key.data) {
+				entry_key.data = lws_alloc(key->len);
+				if (!entry_key.data) {
 					return -1;
 				}
-				memcpy(entry->key.data, key->data, key->len);
-				entry->key.len = key->len;
+				memcpy(entry_key.data, key->data, key->len);
+				entry_key.len = key->len;
 			} else {
-				entry->key = *key;
+				entry_key = *key;
 			}
+			entry = lws_table_insert(t, key, hash);
+			entry->key = entry_key;
 			entry->value = value;
 			entry->hash = hash;
 			entry->state = LWS_TES_SET;
@@ -256,12 +258,12 @@ static lws_uint_t lws_table_hash (lws_table_t *t, lws_str_t *key) {
 	if (t->ci) {
 		while (p > key->data) {
 			p--;
-			hash ^= lws_tolower(*p);  /* no '--' due to macro multiple evaluation */
+			hash ^= (unsigned char)lws_tolower(*p);  /* no '--' due to macro multiple evaluation */
 			hash *= _LWS_TABLE_HASH_PRIME;
 		}
 	} else {
 		while (p > key->data) {
-			hash ^= *--p;
+			hash ^= (unsigned char)*--p;
 			hash *= _LWS_TABLE_HASH_PRIME;
 		}
 	}
@@ -339,8 +341,8 @@ static lws_table_entry_t *lws_table_find (lws_table_t *t, lws_str_t *key, lws_ui
 	q = hash % (t->alloc - 2) + 1;
 	entry = &t->entries[h];
 	while (entry->state != LWS_TES_UNUSED) {
-		if (entry->hash == hash && entry->key.len == key->len && (t->ci
-				? lws_strncasecmp(entry->key.data, key->data, key->len)
+		if (entry->state == LWS_TES_SET && entry->hash == hash && entry->key.len == key->len
+				&& (t->ci ? lws_strncasecmp(entry->key.data, key->data, key->len)
 				: lws_strncmp(entry->key.data, key->data, key->len)) == 0) {
 			return entry;
 		}
