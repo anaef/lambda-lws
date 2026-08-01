@@ -163,7 +163,13 @@ custom runtime supplies `null` as the response body.
 
 > [!TIP]
 > The raw processing mode is useful for implementing non-HTTP services, such as those driven by
-> AWS Lambda event source mappings. 
+> AWS Lambda event source mappings.
+
+> [!CAUTION]
+> Indexed access to *non-flat* raw JSON arrays, such as the `Records` arrays in certain AWS event
+> payloads, can take linear time in yyjson's in-memory representation. Iteration by index, including
+> with `ipairs`, is not presently optimized and can take quadratic time. Therefore, operators must
+> enforce appropriate resource limits for raw event processing.
 
 
 ## Lifecycle of the Lua State
