@@ -1,7 +1,7 @@
 /*
  * LWS runtime
  *
- * Copyright (C) 2025 Andre Naef
+ * Copyright (C) 2025, 2026 Andre Naef
  */
 
 
@@ -212,6 +212,7 @@ int main (int argc, char *argv[]) {
 			rc = EXIT_FAILURE;
 			goto global_cleanup;
 		}
+		ctx.match_init = 1;
 	}
 	lws_getenv_str("LWS_MAIN", &ctx.main);
 	if (!ctx.main.len) {
@@ -441,7 +442,7 @@ int main (int argc, char *argv[]) {
 	}
 
 	/* cleanup configuration */
-	if (ctx.match.re_nsub > 0) {
+	if (ctx.match_init) {
 		regfree(&ctx.match);
 	}
 

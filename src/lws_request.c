@@ -1,7 +1,7 @@
 /*
  * LWS request
  *
- * Copyright (C) 2025 Andre Naef
+ * Copyright (C) 2025, 2026 Andre Naef
  */
 
 
@@ -194,7 +194,7 @@ static int lws_prepare_request (lws_ctx_t *ctx) {
 	/* match path */
 	path_match[0].rm_so = 0;
 	path_match[0].rm_eo = ctx->req_path.len;
-	if (ctx->match.re_nsub > 0) {
+	if (ctx->match_init) {
 		if (regexec(&ctx->match, ctx->req_path.data, 10, path_match, REG_STARTEND) != 0) {
 			lws_log_debug("path not matched:%.*s", (int)ctx->req_path.len, ctx->req_path.data);
 			return 404;  /* not found */

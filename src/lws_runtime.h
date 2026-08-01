@@ -1,7 +1,7 @@
 /*
  * LWS runtime
  *
- * Copyright (C) 2025 Andre Naef
+ * Copyright (C) 2025. 2026 Andre Naef
  */
 
 
@@ -52,6 +52,7 @@ struct lws_ctx_s {
 	lua_State            *L;                      /* Lua state */
 	lws_int_t             req_count;              /* requests served */
 	unsigned              curl_global_init:1;     /* CURL global init done */
+	unsigned              match_init:1;           /* path matching regex initialized */
 	unsigned              streaming_init:1;       /* streaming init done */
 	unsigned              state_init:1;           /* Lua state initialized */
 	unsigned              state_close:1;          /* Lua state is to be closed */ 

@@ -8,6 +8,7 @@
 - Fix build compatibility with GCC 15.
 - Fix table use-after-free and duplicate-key allocation failure.
 - Harden table options and hashing.
+- Fix zero-capture LWS_MATCH expressions allowing nonmatching request paths.
 
 
 ## Release 0.9.1 beta (2025-09-04)
