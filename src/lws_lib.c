@@ -6,6 +6,7 @@
 
 
 #include <limits.h>
+#include <stdint.h>
 #include <lauxlib.h>
 #include <lualib.h>
 #include <lws_lib.h>
@@ -452,7 +453,7 @@ static int lws_lua_yyjson_arr_index (lua_State *L) {
 
 	lval = luaL_checkudata(L, 1, LWS_YYJSON_ARR);
 	index = lua_tointegerx(L, 2, &isnum);
-	if (!isnum) {
+	if (!isnum || index < 1 || (uintmax_t)index > SIZE_MAX) {
 		lua_pushnil(L);
 		return 1;
 	}

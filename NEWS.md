@@ -13,6 +13,7 @@
 - Fix lws.parseargs handling of additional equals signs and incomplete percent escapes.
 - Harden query argument parsing with a configurable field limit defaulting to 255.
 - Clear request environments from cached Lua chunks after execution.
+- Harden raw JSON array access for invalid indices.
 
 
 ## Release 0.9.1 beta (2025-09-04)
