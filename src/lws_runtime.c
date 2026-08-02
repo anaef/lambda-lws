@@ -364,15 +364,15 @@ int main (int argc, char *argv[]) {
 		lws_table_clear(ctx.headers);
 		ctx.request_id = NULL;
 		ctx.content_length = -1;
+		if (ctx.doc) {
+			yyjson_doc_free(ctx.doc);
+			ctx.doc = NULL;
+		}
 		if (ctx.body.data) {
 			lws_free(ctx.body.data);
 			ctx.body.data = NULL;
 			ctx.body.len = 0;
 			ctx.body_cap = 0;
-		}
-		if (ctx.doc) {
-			yyjson_doc_free(ctx.doc);
-			ctx.doc = NULL;
 		}
 
 		/* payload request cleanup */
