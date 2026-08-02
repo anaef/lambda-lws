@@ -86,7 +86,6 @@ static int lws_lua_strict_index(lua_State *L);
 /* file */
 static luaL_Stream *lws_create_file(lua_State *L);
 static int lws_close_file(lua_State *L);
-static int lws_file_read_hook(lua_State *L);
 static int lws_file_flush_hook(lua_State *L);
 static int lws_hook_file(lua_State *L);
 
@@ -660,38 +659,6 @@ static int lws_close_file (lua_State *L) {
 	return 1;
 }
 
-static int lws_file_read_hook (lua_State *L) {
-	size_t                  fmt_len;
-	const char             *fmt;
-	luaL_Stream            *s;
-	lws_lua_request_ctx_t  *lctx;
-
-	if (lua_gettop(L) != 2 || !lua_isstring(L, 2)) {
-		goto prev;
-	}
-	fmt = lua_tolstring(L, 2, &fmt_len);
-	if ((fmt_len != 1 || fmt[0] != 'a') && (fmt_len != 2 || (fmt[0] != '*' && fmt[1] != 'a'))) {
-		goto prev;
-	}
-	s = luaL_checkudata(L, 1, LUA_FILEHANDLE);
-	lctx = lws_get_lua_request_ctx(L);
-	if (s->f != lctx->ctx->req_body_file) {
-		goto prev;
-	}
-#if LUA_VERSION_NUM >= 505
-	lua_pushexternalstring(L, lctx->ctx->req_body.data, lctx->ctx->req_body.len, NULL, NULL);
-#else
-	lua_pushlstring(L, lctx->ctx->req_body.data, lctx->ctx->req_body.len);
-#endif
-	return 1;
-
-	prev:
-	lua_pushvalue(L, lua_upvalueindex(1));
-	lua_insert(L, 1);
-	lua_call(L, lua_gettop(L) - 1, LUA_MULTRET);
-	return lua_gettop(L);
-}
-
 static int lws_file_flush_hook (lua_State *L) {
 	luaL_Stream            *s;
 	lws_lua_request_ctx_t  *lctx;
@@ -723,11 +690,6 @@ static int lws_hook_file (lua_State *L) {
 	if (lws_getfield(L, -1, "__index") != LUA_TTABLE) {
 		return luaL_error(L, "no file index table");
 	}
-	if (lws_getfield(L, -1, "read") != LUA_TFUNCTION) {
-		return luaL_error(L, "no file read function");
-	}
-	lua_pushcclosure(L, lws_file_read_hook, 1);
-	lua_setfield(L, -2, "read");
 	if (lws_getfield(L, -1, "flush") != LUA_TFUNCTION) {
 		lws_log_debug("no file flush function");
 		lua_pop(L, 3);

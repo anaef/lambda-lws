@@ -16,6 +16,7 @@
 - Harden raw JSON array access for invalid indices.
 - Optimize raw JSON array iteration and document non-flat array performance.
 - Harden request cleanup ordering.
+- Remove broken request body `*a` read hook.
 
 
 ## Release 0.9.1 beta (2025-09-04)
