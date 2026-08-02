@@ -307,6 +307,12 @@ static size_t lws_handle_read (char *ptr, size_t size, size_t nmemb, void *userd
 		ptr += n;
 	}
 
+	/* reclaim consumed response data */
+	if (ctx->resp_body_pos == ctx->resp_body.len) {
+		ctx->resp_body.len = 0;
+		ctx->resp_body_pos = 0;
+	}
+
 	/* nothing sent? */
 	if (remain == len) {
 		if (ctx->streaming_eof) {

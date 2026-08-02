@@ -29,6 +29,7 @@
 - Document post-request access to request-bound values as undefined.
 - Add proper SIGTERM handling with an internal Lambda extension.
 - Harden libcurl cleanup after multi errors.
+- Reuse the streaming response buffer after flushing.
 
 
 ## Release 0.9.1 beta (2025-09-04)
