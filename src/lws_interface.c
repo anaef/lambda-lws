@@ -622,9 +622,10 @@ static int lws_add_cookie (yyjson_mut_doc *doc, yyjson_mut_val *arr, char *data,
 }
 
 static int lws_add_headers (lws_ctx_t *ctx, yyjson_mut_doc *doc) {
+	int              sc_expires;
 	char            *sc_data;
 	void            *value;
-	size_t           sc_len, sc_start, sc_pos;
+	size_t           sc_attr, sc_len, sc_start, sc_pos;
 	lws_str_t       *key, sc_key, *sc_value;
 	yyjson_mut_val  *root, *headers, *h_key, *h_val, *cookies_arr;
 
@@ -673,14 +674,29 @@ static int lws_add_headers (lws_ctx_t *ctx, yyjson_mut_doc *doc) {
 		if (!yyjson_mut_obj_add_val(doc, root, "cookies", cookies_arr)) {
 			return -1;
 		}
+		sc_expires = 0;
 		sc_start = 0;
 		for (sc_pos = 0; sc_pos < sc_len; sc_pos++) {
-			if (sc_data[sc_pos] == ',') {
-				if (lws_add_cookie(doc, cookies_arr, sc_data, sc_start, sc_pos) != 0) {
-					return -1;
+			if (sc_data[sc_pos] == ';') {
+				sc_attr = sc_pos + 1;
+				while (sc_attr < sc_len && (sc_data[sc_attr] == ' ' || sc_data[sc_attr] == '\t')) {
+					sc_attr++;
 				}
-				sc_start = sc_pos + 1;
+				sc_expires = sc_len - sc_attr >= sizeof("Expires=") - 1 && lws_strncasecmp(
+						sc_data + sc_attr, "Expires=", sizeof("Expires=") - 1) == 0;
+				continue;
 			}
+			if (sc_data[sc_pos] != ',') {
+				continue;
+			}
+			if (sc_expires) {
+				sc_expires = 0;
+				continue;
+			}
+			if (lws_add_cookie(doc, cookies_arr, sc_data, sc_start, sc_pos) != 0) {
+				return -1;
+			}
+			sc_start = sc_pos + 1;
 		}
 		if (lws_add_cookie(doc, cookies_arr, sc_data, sc_start, sc_len) != 0) {
 			return -1;
