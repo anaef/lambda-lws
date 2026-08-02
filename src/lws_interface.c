@@ -488,6 +488,8 @@ int lws_get_next_invocation (lws_ctx_t *ctx) {
 			}
 			ctx->req_ip.data = (char *)yyjson_get_str(val);
 			ctx->req_ip.len = yyjson_get_len(val);
+		} else {
+			lws_str_set(&ctx->req_ip, "");
 		}
 
 		/* headers */
@@ -599,6 +601,10 @@ int lws_get_next_invocation (lws_ctx_t *ctx) {
 		}
 	} else {
 		/* raw mode */
+		lws_str_set(&ctx->req_method, "");
+		lws_str_set(&ctx->req_path, "");
+		lws_str_set(&ctx->req_args, "");
+		lws_str_set(&ctx->req_ip, "");
 		lws_str_set(&ctx->req_body, "");
 	}
 

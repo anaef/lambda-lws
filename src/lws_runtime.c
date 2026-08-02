@@ -384,8 +384,10 @@ int main (int argc, char *argv[]) {
 			lws_free(ctx.req_main.data);
 			lws_str_null(&ctx.req_main);
 		}
-		if (ctx.req_path_info.data) {
+		if (ctx.path_info.len) {
 			lws_free(ctx.req_path_info.data);
+			lws_str_null(&ctx.req_path_info);
+		} else if (ctx.req_path_info.data) {
 			lws_str_null(&ctx.req_path_info);
 		}
 		lws_table_clear(ctx.req_headers);

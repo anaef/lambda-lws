@@ -239,6 +239,8 @@ static int lws_prepare_request (lws_ctx_t *ctx) {
 			return -1;
 		}
 		lws_log_debug("path info:%.*s", (int)ctx->req_path_info.len, ctx->req_path_info.data);
+	} else {
+		lws_str_set(&ctx->req_path_info, "");
 	}
 
 	/* body */
