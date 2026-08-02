@@ -23,6 +23,7 @@
 - Document unescaped text log output.
 - Fix empty response body serialization.
 - Harden handling of (invalid) empty Runtime API invocation bodies.
+- Harden Runtime API transfer size checks.
 
 
 ## Release 0.9.1 beta (2025-09-04)

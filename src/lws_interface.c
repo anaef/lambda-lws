@@ -6,6 +6,7 @@
 
 
 #include <errno.h>
+#include <limits.h>
 #include <pthread.h>
 #include <signal.h>
 #include <unistd.h>
@@ -18,7 +19,8 @@
 
 
 #define LWS_USERAGENT               "lambda-lws/0.9"
-#define LWS_CURL_OFF_T_MAX          (size_t)((curl_off_t)(~(curl_off_t)0 >> 1))
+#define LWS_CURL_OFF_T_MAX          ((size_t)((((curl_off_t)1 << (sizeof(curl_off_t) * CHAR_BIT \
+		- 2)) - 1) * 2 + 1))
 #define LWS_CONTENT_LENGTH          "Content-Length"
 #define LWS_LAMBDA_TRACE_ID         "Lambda-Runtime-Trace-Id"
 #define LWS_LAMBDA_REQUEST_ID       "Lambda-Runtime-Aws-Request-Id"
