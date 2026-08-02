@@ -234,7 +234,7 @@ int main (int argc, char *argv[]) {
 		rc = EXIT_FAILURE;
 		goto global_cleanup;
 	}
-	if (lws_getenv_int("LWS_REQ_MAX", &ctx.state_req_max) != 0) {
+	if (lws_getenv_int("LWS_REQ_MAX", &ctx.state_req_max) != 0 || ctx.state_req_max < 0) {
 		lws_post_error(&ctx, "bad LWS_REQ_MAX value");
 		rc = EXIT_FAILURE;
 		goto global_cleanup;

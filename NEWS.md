@@ -24,6 +24,7 @@
 - Fix empty response body serialization.
 - Harden handling of (invalid) empty Runtime API invocation bodies.
 - Harden Runtime API transfer size checks.
+- Harden validation of the Lua state request limit.
 
 
 ## Release 0.9.1 beta (2025-09-04)
