@@ -769,7 +769,8 @@ int lws_post_response (lws_ctx_t *ctx) {
 			}
 			lws_base64_encode((uint8_t *)ctx->resp_body.data, &ctx->resp_body.len);
 		}
-		if (!yyjson_mut_obj_add_strn(doc, root, "body", ctx->resp_body.data, ctx->resp_body.len)) {
+		if (!yyjson_mut_obj_add_strn(doc, root, "body", ctx->resp_body.len > 0 ? ctx->resp_body.data
+				: "", ctx->resp_body.len)) {
 			goto oom;
 		}
 		if (!yyjson_mut_obj_add_bool(doc, root, "isBase64Encoded", base64)) {

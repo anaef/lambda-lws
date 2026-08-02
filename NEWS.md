@@ -21,6 +21,7 @@
 - Fix Set-Cookie serialization with Expires attributes.
 - Harden streaming response header lifetime.
 - Document unescaped text log output.
+- Fix empty response body serialization.
 
 
 ## Release 0.9.1 beta (2025-09-04)
