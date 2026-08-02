@@ -15,6 +15,7 @@
 - Clear request environments from cached Lua chunks after execution.
 - Harden raw JSON array access for invalid indices.
 - Optimize raw JSON array iteration and document non-flat array performance.
+- Fix conversion of large unsigned raw JSON integers.
 - Harden request cleanup ordering.
 - Remove broken request body `*a` read hook.
 - Fix Set-Cookie serialization with Expires attributes.

@@ -385,6 +385,7 @@ static int lws_lua_table_gc (lua_State *L) {
 
 static int lws_lua_yyjson_push_val (lua_State *L, yyjson_val *v) {
 	size_t                len;
+	uint64_t              num;
 	const char            *s;
 	lws_lua_yyjson_arr_t  *larr;
 	lws_lua_yyjson_obj_t  *lobj;
@@ -404,8 +405,15 @@ static int lws_lua_yyjson_push_val (lua_State *L, yyjson_val *v) {
 	case YYJSON_TYPE_NUM:
 		switch (yyjson_get_subtype(v)) {
 		case YYJSON_SUBTYPE_SINT:
-		case YYJSON_SUBTYPE_UINT:
 			lua_pushinteger(L, yyjson_get_sint(v));
+			break;
+
+		case YYJSON_SUBTYPE_UINT:
+			num = yyjson_get_uint(v);
+			if (num <= (uint64_t)LUA_MAXINTEGER)
+				lua_pushinteger(L, (lua_Integer)num);
+			else
+				lua_pushnumber(L, (lua_Number)num);
 			break;
 
 		default:
