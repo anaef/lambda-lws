@@ -1,58 +1,96 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# region
-export AWS_REGION="eu-central-1"
-
-# names
+# settings
+AWS_REGION="${AWS_REGION:-eu-central-1}"
 REPO="lambda-lws"                    # ECR repo to hold this image family
+ROLE_NAME="lambda-basic-execution"   # Lambda execution role name
 FUNC_NAME="lambda-lws-examples-raw"  # Lambda function name
 IMAGE="lambda-lws-examples-raw"      # local image to push
-IMAGE_TAG="$(date -u +%Y%m%d-%H%M%S)"
+IMAGE_TAG="raw-$(date -u +%Y%m%d-%H%M%S)"
+LOCAL_IMAGE="lambda-lws/${IMAGE}:latest"
 
-ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+# check dependencies
+if ! command -v aws >/dev/null 2>&1; then
+	echo "AWS CLI is required." >&2
+	exit 1
+fi
+if ! docker compose version >/dev/null 2>&1; then
+	echo "Docker with the Compose plugin is required." >&2
+	exit 1
+fi
+
+# check AWS credentials
+ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text --region "${AWS_REGION}")"
+
+# build a single-architecture Lambda image
+docker compose build --provenance=false "${IMAGE}"
+DOCKER_ARCHITECTURE="$(docker image inspect --format '{{.Architecture}}' "${LOCAL_IMAGE}")"
+case "${DOCKER_ARCHITECTURE}" in
+	amd64) ARCHITECTURE="x86_64" ;;
+	arm64) ARCHITECTURE="arm64" ;;
+	*)
+		printf 'Unsupported Docker image architecture: %s\n' "${DOCKER_ARCHITECTURE}" >&2
+		exit 1
+		;;
+esac
+
+# determine the ECR location
 ECR_REGISTRY="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
 ECR_URI="${ECR_REGISTRY}/${REPO}:${IMAGE_TAG}"
 
-# ensure ECR repo exists
-aws ecr describe-repositories --repository-names "${REPO}" --region "${AWS_REGION}" >/dev/null 2>&1 \
-	|| aws ecr create-repository --repository-name "${REPO}" --image-scanning-configuration scanOnPush=true --region "${AWS_REGION}" >/dev/null
+# ensure ECR repository exists
+if ! aws ecr describe-repositories --repository-names "${REPO}" --region "${AWS_REGION}" \
+	>/dev/null 2>&1; then
+	aws ecr create-repository --repository-name "${REPO}" \
+		--image-scanning-configuration scanOnPush=true --region "${AWS_REGION}" >/dev/null
+fi
 
-# login to ECR
+# login to ECR and push the image
 aws ecr get-login-password --region "${AWS_REGION}" \
 	| docker login --username AWS --password-stdin "${ECR_REGISTRY}"
-
-# build the exact compose target and push to ECR
-docker compose build ${IMAGE}
-docker tag lambda-lws/${IMAGE}:latest "${ECR_URI}"
+docker tag "${LOCAL_IMAGE}" "${ECR_URI}"
 docker push "${ECR_URI}"
 
-# reuse/create execution role
-ROLE_ARN="$(aws iam get-role --role-name lambda-basic-execution --query Role.Arn --output text 2>/dev/null || true)"
-if [ -z "${ROLE_ARN}" ]; then
-	cat > trust-policy.json <<'JSON'
-{ "Version":"2012-10-17", "Statement":[{ "Effect":"Allow", "Principal":{"Service":"lambda.amazonaws.com"}, "Action":"sts:AssumeRole"}]}
-JSON
-	aws iam create-role --role-name lambda-basic-execution --assume-role-policy-document file://trust-policy.json >/dev/null
-	aws iam attach-role-policy --role-name lambda-basic-execution \
+# reuse or create the execution role
+if ! ROLE_ARN="$(aws iam get-role --role-name "${ROLE_NAME}" --query Role.Arn --output text \
+	2>/dev/null)"; then
+	TRUST_POLICY='{
+		"Version": "2012-10-17",
+		"Statement": [{
+			"Effect": "Allow",
+			"Principal": {"Service": "lambda.amazonaws.com"},
+			"Action": "sts:AssumeRole"
+		}]
+	}'
+	ROLE_ARN="$(aws iam create-role --role-name "${ROLE_NAME}" \
+		--assume-role-policy-document "${TRUST_POLICY}" --query Role.Arn --output text)"
+	aws iam attach-role-policy --role-name "${ROLE_NAME}" \
 		--policy-arn arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole >/dev/null
-	ROLE_ARN="$(aws iam get-role --role-name lambda-basic-execution --query Role.Arn --output text)"
 fi
 
 # create or update the Lambda function
-aws lambda create-function \
-	--function-name "$FUNC_NAME" \
-	--package-type Image \
-	--code ImageUri="$ECR_URI" \
-	--role "$ROLE_ARN" \
-	--region "$AWS_REGION" >/dev/null 2>&1 || {
+if aws lambda get-function --function-name "${FUNC_NAME}" --region "${AWS_REGION}" \
+	>/dev/null 2>&1; then
 	aws lambda update-function-code \
-		--function-name "$FUNC_NAME" \
-		--image-uri "$ECR_URI" \
-		--region "$AWS_REGION" >/dev/null
-}
-aws lambda wait function-updated \
-	--function-name "$FUNC_NAME" \
-	--region "$AWS_REGION" >/dev/null
+		--function-name "${FUNC_NAME}" \
+		--image-uri "${ECR_URI}" \
+		--architectures "${ARCHITECTURE}" \
+		--region "${AWS_REGION}" >/dev/null
+	aws lambda wait function-updated-v2 \
+		--function-name "${FUNC_NAME}" \
+		--region "${AWS_REGION}"
+else
+	aws lambda create-function \
+		--function-name "${FUNC_NAME}" \
+		--package-type Image \
+		--code ImageUri="${ECR_URI}" \
+		--role "${ROLE_ARN}" \
+		--architectures "${ARCHITECTURE}" \
+		--region "${AWS_REGION}" >/dev/null
+	aws lambda wait function-active-v2 \
+		--function-name "${FUNC_NAME}" \
+		--region "${AWS_REGION}"
+fi
 
 echo "Deployed ${FUNC_NAME} with image ${ECR_URI}"

@@ -1,150 +1,194 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# region
-export AWS_REGION="eu-central-1"
-
-# names
+# settings
+AWS_REGION="${AWS_REGION:-eu-central-1}"
 REPO="lambda-lws"                        # ECR repo to hold this image family
+ROLE_NAME="lambda-basic-execution"       # Lambda execution role name
 FUNC_NAME="lambda-lws-examples-default"  # Lambda function name
 IMAGE="lambda-lws-examples-default"      # local image to push
-IMAGE_TAG="$(date -u +%Y%m%d-%H%M%S)"
+IMAGE_TAG="default-$(date -u +%Y%m%d-%H%M%S)"
+LOCAL_IMAGE="lambda-lws/${IMAGE}:latest"
 
-ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+# check dependencies
+if ! command -v aws >/dev/null 2>&1; then
+	echo "AWS CLI is required." >&2
+	exit 1
+fi
+if ! docker compose version >/dev/null 2>&1; then
+	echo "Docker with the Compose plugin is required." >&2
+	exit 1
+fi
+
+# check AWS credentials
+ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text --region "${AWS_REGION}")"
+
+# build a single-architecture Lambda image
+docker compose build --provenance=false "${IMAGE}"
+DOCKER_ARCHITECTURE="$(docker image inspect --format '{{.Architecture}}' "${LOCAL_IMAGE}")"
+case "${DOCKER_ARCHITECTURE}" in
+	amd64) ARCHITECTURE="x86_64" ;;
+	arm64) ARCHITECTURE="arm64" ;;
+	*)
+		printf 'Unsupported Docker image architecture: %s\n' "${DOCKER_ARCHITECTURE}" >&2
+		exit 1
+		;;
+esac
+
+# determine the ECR location
 ECR_REGISTRY="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
 ECR_URI="${ECR_REGISTRY}/${REPO}:${IMAGE_TAG}"
 
-# ensure ECR repo exists
-aws ecr describe-repositories --repository-names "${REPO}" --region "${AWS_REGION}" >/dev/null 2>&1 \
-	|| aws ecr create-repository --repository-name "${REPO}" --image-scanning-configuration scanOnPush=true --region "${AWS_REGION}" >/dev/null
+# ensure ECR repository exists
+if ! aws ecr describe-repositories --repository-names "${REPO}" --region "${AWS_REGION}" \
+	>/dev/null 2>&1; then
+	aws ecr create-repository --repository-name "${REPO}" \
+		--image-scanning-configuration scanOnPush=true --region "${AWS_REGION}" >/dev/null
+fi
 
-# login to ECR
+# login to ECR and push the image
 aws ecr get-login-password --region "${AWS_REGION}" \
 	| docker login --username AWS --password-stdin "${ECR_REGISTRY}"
-
-# build the exact compose target and push to ECR
-docker compose build ${IMAGE}
-docker tag lambda-lws/${IMAGE}:latest "${ECR_URI}"
+docker tag "${LOCAL_IMAGE}" "${ECR_URI}"
 docker push "${ECR_URI}"
 
-# reuse/create execution role
-ROLE_ARN="$(aws iam get-role --role-name lambda-basic-execution --query Role.Arn --output text 2>/dev/null || true)"
-if [ -z "${ROLE_ARN}" ]; then
-	cat > trust-policy.json <<'JSON'
-{ "Version":"2012-10-17", "Statement":[{ "Effect":"Allow", "Principal":{"Service":"lambda.amazonaws.com"}, "Action":"sts:AssumeRole"}]}
-JSON
-	aws iam create-role --role-name lambda-basic-execution --assume-role-policy-document file://trust-policy.json >/dev/null
-	aws iam attach-role-policy --role-name lambda-basic-execution \
+# reuse or create the execution role
+if ! ROLE_ARN="$(aws iam get-role --role-name "${ROLE_NAME}" --query Role.Arn --output text \
+	2>/dev/null)"; then
+	TRUST_POLICY='{
+		"Version": "2012-10-17",
+		"Statement": [{
+			"Effect": "Allow",
+			"Principal": {"Service": "lambda.amazonaws.com"},
+			"Action": "sts:AssumeRole"
+		}]
+	}'
+	ROLE_ARN="$(aws iam create-role --role-name "${ROLE_NAME}" \
+		--assume-role-policy-document "${TRUST_POLICY}" --query Role.Arn --output text)"
+	aws iam attach-role-policy --role-name "${ROLE_NAME}" \
 		--policy-arn arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole >/dev/null
-	ROLE_ARN="$(aws iam get-role --role-name lambda-basic-execution --query Role.Arn --output text)"
 fi
 
 # create or update the Lambda function
-aws lambda create-function \
-	--function-name "$FUNC_NAME" \
-	--package-type Image \
-	--code ImageUri="$ECR_URI" \
-	--role "$ROLE_ARN" \
-	--timeout 5 \
-	--region "$AWS_REGION" >/dev/null 2>&1 || {
+if aws lambda get-function --function-name "${FUNC_NAME}" --region "${AWS_REGION}" \
+	>/dev/null 2>&1; then
 	aws lambda update-function-code \
-		--function-name "$FUNC_NAME" \
-		--image-uri "$ECR_URI" \
-		--region "$AWS_REGION" >/dev/null
-	aws lambda wait function-updated \
-		--function-name "$FUNC_NAME" \
-		--region "$AWS_REGION" >/dev/null
+		--function-name "${FUNC_NAME}" \
+		--image-uri "${ECR_URI}" \
+		--architectures "${ARCHITECTURE}" \
+		--region "${AWS_REGION}" >/dev/null
+	aws lambda wait function-updated-v2 \
+		--function-name "${FUNC_NAME}" \
+		--region "${AWS_REGION}"
 	aws lambda update-function-configuration \
-		--function-name "$FUNC_NAME" \
+		--function-name "${FUNC_NAME}" \
 		--timeout 5 \
-		--region "$AWS_REGION" >/dev/null
-}
-aws lambda wait function-updated \
-	--function-name "$FUNC_NAME" \
-	--region "$AWS_REGION" >/dev/null
+		--region "${AWS_REGION}" >/dev/null
+	aws lambda wait function-updated-v2 \
+		--function-name "${FUNC_NAME}" \
+		--region "${AWS_REGION}"
+else
+	aws lambda create-function \
+		--function-name "${FUNC_NAME}" \
+		--package-type Image \
+		--code ImageUri="${ECR_URI}" \
+		--role "${ROLE_ARN}" \
+		--timeout 5 \
+		--architectures "${ARCHITECTURE}" \
+		--region "${AWS_REGION}" >/dev/null
+	aws lambda wait function-active-v2 \
+		--function-name "${FUNC_NAME}" \
+		--region "${AWS_REGION}"
+fi
 
-# obtain the version of the deployed function
+# publish the deployed function
 VERSION="$(aws lambda publish-version \
-	--function-name "$FUNC_NAME" \
-	--region "$AWS_REGION" \
+	--function-name "${FUNC_NAME}" \
+	--region "${AWS_REGION}" \
 	--query Version --output text)"
 
-# create or update two aliases, "buffered" and "stream"
-aws lambda create-alias \
-	--function-name "$FUNC_NAME" \
-	--name "buffered" \
-	--function-version "$VERSION" \
-	--region "$AWS_REGION" >/dev/null 2>&1 || \
-aws lambda update-alias \
-	--function-name "$FUNC_NAME" \
-	--name "buffered" \
-	--function-version "$VERSION" \
-	--region "$AWS_REGION" >/dev/null
+# create or update an alias
+set_alias() {
+	local alias_name="${1}"
 
-aws lambda create-alias \
-	--function-name "$FUNC_NAME" \
-	--name "stream" \
-	--function-version "$VERSION" \
-	--region "$AWS_REGION" >/dev/null 2>&1 || \
-aws lambda update-alias \
-	--function-name "$FUNC_NAME" \
-	--name "stream" \
-	--function-version "$VERSION" \
-	--region "$AWS_REGION" >/dev/null
+	if aws lambda get-alias --function-name "${FUNC_NAME}" --name "${alias_name}" \
+		--region "${AWS_REGION}" >/dev/null 2>&1; then
+		aws lambda update-alias --function-name "${FUNC_NAME}" --name "${alias_name}" \
+			--function-version "${VERSION}" --region "${AWS_REGION}" >/dev/null
+	else
+		aws lambda create-alias --function-name "${FUNC_NAME}" --name "${alias_name}" \
+			--function-version "${VERSION}" --region "${AWS_REGION}" >/dev/null
+	fi
+}
 
-# create or update two function URLs, one for each alias
-aws lambda create-function-url-config \
-	--function-name "$FUNC_NAME" \
-	--qualifier "buffered" \
-	--auth-type NONE \
-	--region "$AWS_REGION" >/dev/null 2>&1 || \
-aws lambda update-function-url-config \
-	--function-name "$FUNC_NAME" \
-	--qualifier "buffered" \
-	--auth-type NONE \
-	--region "$AWS_REGION" >/dev/null
+set_alias "buffered"
+set_alias "stream"
+
+# create or update a function URL
+set_function_url() {
+	local qualifier="${1}"
+	local invoke_mode="${2}"
+
+	if aws lambda get-function-url-config --function-name "${FUNC_NAME}" \
+		--qualifier "${qualifier}" --region "${AWS_REGION}" >/dev/null 2>&1; then
+		aws lambda update-function-url-config --function-name "${FUNC_NAME}" \
+			--qualifier "${qualifier}" --auth-type NONE --invoke-mode "${invoke_mode}" \
+			--region "${AWS_REGION}" >/dev/null
+	else
+		aws lambda create-function-url-config --function-name "${FUNC_NAME}" \
+			--qualifier "${qualifier}" --auth-type NONE --invoke-mode "${invoke_mode}" \
+			--region "${AWS_REGION}" >/dev/null
+	fi
+}
+
+set_function_url "buffered" "BUFFERED"
+set_function_url "stream" "RESPONSE_STREAM"
+
+# get the function URLs
 URL_BUFFERED="$(aws lambda get-function-url-config \
-	--function-name "$FUNC_NAME" \
+	--function-name "${FUNC_NAME}" \
 	--qualifier "buffered" \
 	--query FunctionUrl --output text \
-	--region "$AWS_REGION")"
-
-aws lambda create-function-url-config \
-	--function-name "$FUNC_NAME" \
-	--qualifier "stream" \
-	--auth-type NONE \
-	--invoke-mode RESPONSE_STREAM \
-	--region "$AWS_REGION" >/dev/null 2>&1 || \
-aws lambda update-function-url-config \
-	--function-name "$FUNC_NAME" \
-	--qualifier "stream" \
-	--auth-type NONE \
-	--invoke-mode RESPONSE_STREAM \
-	--region "$AWS_REGION" >/dev/null
+	--region "${AWS_REGION}")"
 URL_STREAM="$(aws lambda get-function-url-config \
-	--function-name "$FUNC_NAME" \
+	--function-name "${FUNC_NAME}" \
 	--qualifier "stream" \
 	--query FunctionUrl --output text \
-	--region "$AWS_REGION")"
+	--region "${AWS_REGION}")"
 
-# allow public invoke of the function URLs
-aws lambda add-permission \
-	--function-name "$FUNC_NAME" \
-	--qualifier "buffered" \
-	--action lambda:InvokeFunctionUrl \
-	--principal "*" \
-	--function-url-auth-type NONE \
-	--statement-id "public-url-buffered" \
-	--region "$AWS_REGION" >/dev/null 2>&1 || true
+# test whether a permission statement exists
+has_permission() {
+	local qualifier="${1}"
+	local statement_id="${2}"
+	local policy
 
-aws lambda add-permission \
-	--function-name "$FUNC_NAME" \
-	--qualifier "stream" \
-	--action lambda:InvokeFunctionUrl \
-	--principal "*" \
-	--function-url-auth-type NONE \
-	--statement-id "public-url-stream" \
-	--region "$AWS_REGION" >/dev/null 2>&1 || true
+	policy="$(aws lambda get-policy --function-name "${FUNC_NAME}" --qualifier "${qualifier}" \
+		--query Policy --output text --region "${AWS_REGION}" 2>/dev/null)" || return 1
+	[[ "${policy}" == *"${statement_id}"* ]]
+}
+
+# add a permission statement unless it already exists
+add_permission() {
+	local qualifier="${1}"
+	local statement_id="${2}"
+	shift 2
+
+	if ! has_permission "${qualifier}" "${statement_id}"; then
+		aws lambda add-permission --function-name "${FUNC_NAME}" --qualifier "${qualifier}" \
+			--principal "*" --statement-id "${statement_id}" "$@" \
+			--region "${AWS_REGION}" >/dev/null
+	fi
+}
+
+# allow public invocation through the function URLs
+add_permission "buffered" "public-url-buffered" \
+	--action lambda:InvokeFunctionUrl --function-url-auth-type NONE
+add_permission "buffered" "public-invoke-buffered" \
+	--action lambda:InvokeFunction --invoked-via-function-url
+add_permission "stream" "public-url-stream" \
+	--action lambda:InvokeFunctionUrl --function-url-auth-type NONE
+add_permission "stream" "public-invoke-stream" \
+	--action lambda:InvokeFunction --invoked-via-function-url
 
 echo "Function URL (buffered): ${URL_BUFFERED}"
 echo "Function URL (stream):   ${URL_STREAM}"

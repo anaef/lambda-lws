@@ -2,12 +2,13 @@
 
 The development container provides a Linux environment for building and testing Lambda LWS. It
 uses Ubuntu 26.04, GCC, GDB, Valgrind, yyjson, libcurl, and Lua 5.1 through 5.5, with Lua 5.4 used
-by default.
+by default. AWS CLI version 2 is also installed.
 
 The repository is mounted at `/workspaces/lambda-lws`. Development commands are stored in
 `/workspaces/lambda-lws/.devcontainer/bin`, which is added to `PATH`. The project-level `bin`
-directory is deliberately not added to `PATH`; it contains the separate
-[AWS deployment scripts](../doc/GettingStarted.md#testing-with-aws-lambda).
+directory is deliberately not added to `PATH`; it contains separate
+[example AWS deployment scripts](../doc/GettingStarted.md#testing-with-aws-lambda) that also work
+outside of the development container.
 
 The container reuses the host Docker daemon through the forwarded Docker socket. It does not run a
 second Docker daemon. Docker images and containers created from the development container are

@@ -11,6 +11,7 @@ RUN sed -i \
         /etc/apt/sources.list.d/ubuntu.sources \
     && apt-get update \
     && apt-get install -y --no-install-recommends \
+        awscli \
         build-essential \
         ca-certificates \
         cmake \

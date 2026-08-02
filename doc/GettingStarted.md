@@ -100,24 +100,29 @@ Interface Emulator (RIE), and Valgrind, see the
 
 ## Testing with AWS Lambda
 
+The example deployment scripts use Docker with the Compose plugin and AWS CLI version 2.
+
 The `bin` directory contains an example `deploy-default` script that performs the following steps:
 
-1.  Create an Elastic Container Registry (ECR) repository if it does not already exist.
-2.  Perform a Docker login to the ECR repository.
-3.  Build and push the `lambda-lws-examples-default` image to the ECR repository.
-4.  Get (or create) an execution role.
-5.  Create (or update) the AWS Lambda function using the pushed image and the execution role.
-6.  Obtain the version of the deployed function.
-7.  Create (or update) two aliases, `buffered` and `stream`, pointing to the deployed version.
-8.  Create (or update) two function URLs, one for each alias, configured for buffered and streamed
+1.  Build the native, single-architecture `lambda-lws-examples-default` image.
+2.  Create an Elastic Container Registry (ECR) repository if it does not already exist.
+3.  Perform a Docker login to the ECR repository.
+4.  Push the `lambda-lws-examples-default` image to the ECR repository.
+5.  Get (or create) an execution role.
+6.  Create (or update) the AWS Lambda function using the pushed image and execution role, with the
+    matching architecture.
+7.  Obtain the version of the deployed function.
+8.  Create (or update) two aliases, `buffered` and `stream`, pointing to the deployed version.
+9.  Create (or update) two function URLs, one for each alias, configured for buffered and streamed
     responses, respectively.
-9.  Allow public invoke of the function URLs.
-10. Print the function URLs.
+10. Allow public invocation of the function URLs.
+11. Print the function URLs.
 
 > [!IMPORTANT]
-> You may want to adjust various settings in the `deploy-default` script, such as the AWS region.
-> By default, the script uses the `eu-central-1` region (Frankfurt) and makes the function URLs
-> publicly accessible without authentication on the Internet.
+> You may want to adjust various settings in the `deploy-default` script, such as the AWS region
+> (which can also be selected with `AWS_REGION`). By default, the script uses the `eu-central-1`
+> region (Frankfurt) and makes the function URLs publicly accessible without authentication on the
+> Internet.
 
 After the function is successfully deployed, you can use `curl` to send requests to the function
 URLs, for example:
@@ -138,13 +143,15 @@ curl {your_stream_function_url}/stream
 > deployment architecture, as function URLs can be configured directly for each function without
 > the need for aliases, and it may also reduce costs.
 
-Similarly, the `bin` directory contains an example `deploy-raw` script that performs steps 1–5 from
-the above list for the `lambda-lws-examples-raw` image. Note that the `deploy-raw` script does not
-configure a function URL, as the raw processing mode is typically used with event source mappings.
+Similarly, the `bin` directory contains an example `deploy-raw` script that performs steps 1–6
+from the above list for the `lambda-lws-examples-raw` image. Note that the `deploy-raw` script does
+not configure a function URL, as the raw processing mode is typically used with event source
+mappings.
 
 > [!IMPORTANT]
-> You may want to adjust various settings in the `deploy-raw` script, such as the AWS region.
-> By default, the script uses the `eu-central-1` region (Frankfurt).
+> You may want to adjust various settings in the `deploy-raw` script, such as the AWS region (which
+> can also be selected with `AWS_REGION`). By default, the script uses the `eu-central-1` region
+> (Frankfurt).
 
 After the function is successfully deployed, you can use the AWS CLI to test the function, for
 example:
