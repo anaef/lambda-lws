@@ -1,7 +1,7 @@
 /*
  * LWS state
  *
- * Copyright (C) 2023,2025 Andre Naef
+ * Copyright (C) 2023-2026 Andre Naef
  */
 
 
@@ -63,7 +63,11 @@ static int lws_init (lua_State *L) {
 static int lws_create_state (lws_ctx_t *ctx) {
 	lws_str_t  msg;
 
+#if LUA_VERSION_NUM >= 505
+	ctx->L = lua_newstate(lws_lua_alloc, NULL, luaL_makeseed(NULL));
+#else
 	ctx->L = lua_newstate(lws_lua_alloc, NULL);
+#endif
 	if (!ctx->L) {
 		lws_log(LWS_LOG_EMERG, "failed to create Lua state");
 		return -1;

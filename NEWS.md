@@ -30,6 +30,7 @@
 - Add proper SIGTERM handling with an internal Lambda extension.
 - Harden libcurl cleanup after multi errors.
 - Reuse the streaming response buffer after flushing.
+- Add compatibility with Lua 5.5.
 
 
 ## Release 0.9.1 beta (2025-09-04)

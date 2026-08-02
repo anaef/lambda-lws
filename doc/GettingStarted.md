@@ -33,8 +33,8 @@ the following environment variables which can be set in a `.env` file:
 | PACKAGES_RUN      | Packages required at runtime     | libcurl          |
 | LUA_VERSION       | Lua version                      | 5.4.8            |
 | LUA_ABI           | Lua ABI version                  | 5.4              |
-| LUAROCKS_VERSION  | LuaRocks version                 | 3.12.2           |
-| LUAROCKS          | Lua rocks required at runtime    | lua-tz luaposix  |
+| LUAROCKS_VERSION  | LuaRocks version                 | 3.13.0           |
+| LUAROCKS          | Lua rocks required at runtime    | lua-tz           |
 | LWS_PORT          | Host port for local RIE testing  | 8080             |
 
 
