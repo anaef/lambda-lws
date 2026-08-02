@@ -139,6 +139,7 @@ minimum severity of messages to be logged.
 
 Controls whether log messages are emitted in text format or in JSON format. The *log_text* value
 can take the values `on` or `off`. The default value for *log_text* is `off`, i.e., JSON format.
+Text-mode log messages are unescaped.
 
 
 ## Information Variables

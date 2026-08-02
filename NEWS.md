@@ -19,6 +19,7 @@
 - Remove broken request body `*a` read hook.
 - Fix Set-Cookie serialization with Expires attributes.
 - Harden streaming response header lifetime.
+- Document unescaped text log output.
 
 
 ## Release 0.9.1 beta (2025-09-04)
