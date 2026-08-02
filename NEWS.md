@@ -27,6 +27,7 @@
 - Harden validation of the Lua state request limit.
 - Harden empty request metadata handling.
 - Document post-request access to request-bound values as undefined.
+- Add proper SIGTERM handling with an internal Lambda extension.
 
 
 ## Release 0.9.1 beta (2025-09-04)

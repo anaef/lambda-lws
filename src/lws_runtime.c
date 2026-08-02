@@ -5,7 +5,6 @@
  */
 
 
-#include <signal.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <errno.h>
@@ -14,9 +13,9 @@
 #include <lws_interface.h>
 #include <lws_request.h>
 #include <lws_state.h>
+#include <lws_shutdown.h>
 
 
-static void lws_handle_sigterm(int sig);
 static void lws_getenv_str(const char *name, lws_str_t *value);
 static int lws_getenv_int(const char *name, lws_int_t *value);
 static int lws_getenv_size(const char *name, size_t *value);
@@ -24,17 +23,9 @@ static int lws_getenv_flag(const char *name, int *value);
 static int lws_getenv_enum(const char *name, unsigned int *value, lws_str_t *options,
 		const char *dfl);
 
-static volatile sig_atomic_t keep_running = 1;
-
-
 /*
  * main
  */
-
-static void lws_handle_sigterm (int sig) {
-	(void)lws_cancel_poll();
-	keep_running = 0;
-}
 
 static void lws_getenv_str (const char *name, lws_str_t *value) {
 	char   *s;
@@ -146,18 +137,16 @@ static int lws_getenv_enum (const char *name, unsigned int *value, lws_str_t *op
 }
 
 int main (int argc, char *argv[]) {
-	int        rc, rc_request;
-	lws_ctx_t  ctx;
-	lws_str_t  match;
+	int                    rc, rc_request, rc_shutdown;
+	lws_ctx_t              ctx;
+	lws_str_t              match;
+	lws_shutdown_status_e  shutdown_status;
 
 	/* log start */
 	lws_log_debug("runtime starting pid:%d", getpid());
 
 	/* assume success */
 	rc = EXIT_SUCCESS;
-
-	/* setup signal handler */
-	signal(SIGTERM, lws_handle_sigterm);
 
 	/* init context */
 	lws_memzero(&ctx, sizeof(ctx));
@@ -200,6 +189,13 @@ int main (int argc, char *argv[]) {
 	ctx.curlm = curl_multi_init();
 	if (!ctx.curlm) {
 		lws_log(LWS_LOG_EMERG, "failed to create libcurl multi handle");
+		rc = EXIT_FAILURE;
+		goto global_cleanup;
+	}
+
+	/* initialize graceful shutdown */
+	if (lws_shutdown_init(&ctx.runtime_api) != 0) {
+		lws_post_error(&ctx, "failed to initialize graceful shutdown");
 		rc = EXIT_FAILURE;
 		goto global_cleanup;
 	}
@@ -294,10 +290,22 @@ int main (int argc, char *argv[]) {
 	lws_table_set_ci(ctx.resp_headers, 1);
 
 	/* request main loop */
-	while (keep_running && rc == EXIT_SUCCESS) {
+	while (rc == EXIT_SUCCESS) {
+		/* handle shutdown */
+		shutdown_status = lws_shutdown_status();
+		if (shutdown_status == LWS_SHUTDOWN_TERM) {
+			lws_log(LWS_LOG_NOTICE, "received term signal");
+			break;
+		} else if (shutdown_status == LWS_SHUTDOWN_FAILURE) {
+			lws_log(LWS_LOG_EMERG, "internal shutdown extension failed msg:%s",
+					lws_shutdown_error());
+			rc = EXIT_FAILURE;
+			break;
+		}
+
 		/* get invocation */
 		if (lws_get_next_invocation(&ctx) != 0) {
-			if (keep_running) {
+			if (lws_shutdown_status() == LWS_SHUTDOWN_NONE) {
 				if (ctx.request_id) {
 					/* we got a request ID and can inform the runtime */
 					if (lws_post_error(&ctx, "failed to get next invocation") != 0) {
@@ -307,8 +315,6 @@ int main (int argc, char *argv[]) {
 					/* no request ID -> cannot inform the runtime -> exit */
 					rc = EXIT_FAILURE;
 				}
-			} else {
-				lws_log(LWS_LOG_NOTICE, "received term signal");
 			}
 			goto request_cleanup;
 		}
@@ -436,17 +442,6 @@ int main (int argc, char *argv[]) {
 	/* global cleanup */
 	global_cleanup:
 
-	/* cleanup libcurl */
-	if (ctx.curl) {
-		curl_easy_cleanup(ctx.curl);
-	}
-	if (ctx.curlm) {
-		curl_multi_cleanup(ctx.curlm);
-	}
-	if (ctx.curl_global_init) {
-		curl_global_cleanup();
-	}
-
 	/* cleanup configuration */
 	if (ctx.match_init) {
 		regfree(&ctx.match);
@@ -473,6 +468,23 @@ int main (int argc, char *argv[]) {
 	/* cleanup payload response */
 	if (ctx.resp_headers) {
 		lws_table_free(ctx.resp_headers);
+	}
+
+	/* cleanup graceful shutdown */
+	rc_shutdown = lws_shutdown_cleanup();
+	if (rc_shutdown != 0) {
+		rc = EXIT_FAILURE;
+	}
+
+	/* cleanup libcurl */
+	if (ctx.curl) {
+		curl_easy_cleanup(ctx.curl);
+	}
+	if (ctx.curlm) {
+		curl_multi_cleanup(ctx.curlm);
+	}
+	if (ctx.curl_global_init && rc_shutdown == 0) {
+		curl_global_cleanup();
 	}
 
 	return rc;

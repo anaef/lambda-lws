@@ -7,14 +7,12 @@
 
 #include <errno.h>
 #include <limits.h>
-#include <pthread.h>
-#include <signal.h>
-#include <unistd.h>
 #include <lws_runtime.h>
 #include <lws_log.h>
 #include <lws_interface.h>
 #include <lws_ngx.h>
 #include <lws_codec.h>
+#include <lws_shutdown.h>
 #include <curl/curl.h>
 
 
@@ -32,11 +30,11 @@
 #define LWS_LAMBDA_SEPARATOR_LEN    8
 #define LWS_CURL_INITIATE           1
 #define LWS_CURL_FINALIZE           2
+#define LWS_CURL_INTERRUPTIBLE      4
 
 /* libcurl */
 static void lws_curl_reset(lws_ctx_t *ctx);
 static int lws_curl_perform(lws_ctx_t *ctx, int flags);
-static int lws_handle_socket(void *userdata, curl_socket_t fd, curlsocktype purpose);
 static size_t lws_handle_header(char *buffer, size_t size, size_t nitems, void *userdata);
 static size_t lws_handle_write(char *ptr, size_t size, size_t nmemb, void *userdata);
 static size_t lws_handle_read(char *ptr, size_t size, size_t nmemb, void *userdata);
@@ -45,11 +43,6 @@ static size_t lws_handle_read(char *ptr, size_t size, size_t nmemb, void *userda
 static int lws_add_cookie(yyjson_mut_doc *doc, yyjson_mut_val *arr, char *data, size_t start,
 		size_t end);
 static int lws_add_headers(lws_ctx_t *ctx, yyjson_mut_doc *doc);
-
-
-static volatile sig_atomic_t cancel_poll = 0;
-static volatile sig_atomic_t in_poll = 0;
-static volatile curl_socket_t curl_socket = CURL_SOCKET_BAD;
 
 
 /*
@@ -67,10 +60,11 @@ static void lws_curl_reset (lws_ctx_t *ctx) {
 }
 
 static int lws_curl_perform (lws_ctx_t *ctx, int flags) {
-	int        remain, rc;
-	long       code;
-	CURLMsg   *msg;
-	CURLMcode  mres;
+	int                 remain, rc;
+	long                code;
+	CURLMsg            *msg;
+	CURLMcode           mres;
+	struct curl_waitfd  waitfd;
 
 	/* add the handle */
 	if (flags & LWS_CURL_INITIATE) {
@@ -79,13 +73,20 @@ static int lws_curl_perform (lws_ctx_t *ctx, int flags) {
 			return -1;
 		}
 	}
+	waitfd.fd = lws_shutdown_runtime_fd();
+	waitfd.events = CURL_WAIT_POLLIN;
+	waitfd.revents = 0;
 
 	/* drive the request */
+	rc = -1;
 	while (1) {
+		if ((flags & LWS_CURL_INTERRUPTIBLE) && lws_shutdown_status() != LWS_SHUTDOWN_NONE) {
+			goto cleanup;
+		}
 		mres = curl_multi_perform(ctx->curlm, &remain);
 		if (mres != CURLM_OK) {
 			lws_log(LWS_LOG_CRIT, "libcurl multi error code:%d str:%s", mres,
-					curl_multi_strerror(mres));	
+					curl_multi_strerror(mres));
 			return -1;
 		}
 		if (!(flags & LWS_CURL_FINALIZE) && (ctx->streaming_paused || !remain)) {
@@ -93,11 +94,11 @@ static int lws_curl_perform (lws_ctx_t *ctx, int flags) {
 		} else if (!remain) {
 			break;  /* request complete */
 		}
-		curl_multi_wait(ctx->curlm, NULL, 0, 1000, NULL);
+		curl_multi_wait(ctx->curlm, flags & LWS_CURL_INTERRUPTIBLE ? &waitfd : NULL,
+				flags & LWS_CURL_INTERRUPTIBLE ? 1 : 0, 1000, NULL);
 	}
 
 	/* reap the result */
-	rc = -1;
 	while (1) {
 		msg = curl_multi_info_read(ctx->curlm, &remain);
 		if (!msg) {
@@ -108,12 +109,8 @@ static int lws_curl_perform (lws_ctx_t *ctx, int flags) {
 			continue;
 		}
 		if (msg->data.result != CURLE_OK) {
-			if (cancel_poll) {
-				lws_log(LWS_LOG_NOTICE, "poll cancelled");
-			} else {
-				lws_log(LWS_LOG_CRIT, "libcurl easy error code:%d str:%s",
-						msg->data.result, curl_easy_strerror(msg->data.result));
-			}
+			lws_log(LWS_LOG_CRIT, "libcurl easy error code:%d str:%s",
+					msg->data.result, curl_easy_strerror(msg->data.result));
 			goto cleanup;
 		}
 		if (curl_easy_getinfo(msg->easy_handle, CURLINFO_RESPONSE_CODE, &code) != CURLE_OK) {
@@ -137,18 +134,6 @@ static int lws_curl_perform (lws_ctx_t *ctx, int flags) {
 	}
 
 	return rc;
-}
-
-static int lws_handle_socket (void *userdata, curl_socket_t fd, curlsocktype purpose) {
-	if (purpose != CURLSOCKTYPE_IPCXN) {
-		return 0;
-	}
-	if (cancel_poll) {
-		return -1;  /* prevent reconnect attempt after forcefully closing socket */
-	}
-	curl_socket = fd;  /* get hold of socket to forcefully close to cancel poll */
-	lws_log_debug("captured socket fd:%d", fd);
-	return 0;
 }
 
 static size_t lws_handle_header (char *buffer, size_t size, size_t nitems, void *userdata) {
@@ -356,17 +341,14 @@ int lws_get_next_invocation (lws_ctx_t *ctx) {
 	lws_curl_reset(ctx);
 	curl_easy_setopt(ctx->curl, CURLOPT_HTTPGET, 1L);
 	curl_easy_setopt(ctx->curl, CURLOPT_URL, invocation_url);
-	curl_easy_setopt(ctx->curl, CURLOPT_SOCKOPTFUNCTION, lws_handle_socket);
 	curl_easy_setopt(ctx->curl, CURLOPT_HEADERFUNCTION, lws_handle_header);
 	curl_easy_setopt(ctx->curl, CURLOPT_HEADERDATA, ctx);
 	curl_easy_setopt(ctx->curl, CURLOPT_WRITEFUNCTION, lws_handle_write);
 	curl_easy_setopt(ctx->curl, CURLOPT_WRITEDATA, ctx);
-	in_poll = 1;
-	if (lws_curl_perform(ctx, LWS_CURL_INITIATE | LWS_CURL_FINALIZE) != 0) {
-		in_poll = 0;
+	if (lws_curl_perform(ctx, LWS_CURL_INITIATE | LWS_CURL_FINALIZE | LWS_CURL_INTERRUPTIBLE)
+			!= 0) {
 		return -1;
 	}
-	in_poll = 0;
 
 	/* request ID */
 	lws_str_set(&key, LWS_LAMBDA_REQUEST_ID);
@@ -1055,16 +1037,4 @@ int lws_post_error (lws_ctx_t *ctx, const char *error_message) {
 		lws_free(json);
 	}
 	return rc;
-}
-
-int lws_cancel_poll () {
-	if (!in_poll || curl_socket == CURL_SOCKET_BAD) {
-		return -1;
-	}
-	cancel_poll = 1;
-	if (close(curl_socket) != 0) {
-		return -1;
-	}
-	curl_socket = CURL_SOCKET_BAD;
-	return 0;
 }

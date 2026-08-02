@@ -6,6 +6,7 @@ The code is structured as follows:
 | --------------------- | --------------------------------------- |
 | `lws_runtime.{h,c}`   | LWS runtime for AWS Lambda, context     |
 | `lws_interface.{h,c}` | AWS Lambda runtime interface            |
+| `lws_shutdown.{h,c}`  | Graceful AWS Lambda runtime shutdown    |
 | `lws_request.{h,c}`   | Request processing logic                |
 | `lws_state.{h,c}`     | Lua state management                    |
 | `lws_lib.{h,c}`       | Lua library                             |

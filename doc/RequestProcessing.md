@@ -190,3 +190,17 @@ state of the execution environment is closed after finalizing the request.
 
 After the Lua state has been closed, the next request handled by the execution environment creates
 a new Lua state, which runs the init chunk (if any) before processing the request.
+
+
+## Runtime Shutdown
+
+LWS registers an internal Lambda extension to enable graceful runtime shutdown. The extension
+occupies one of the ten extension slots available to an AWS Lambda function. If the extension
+cannot be initialized, runtime initialization fails. If the extension fails later, LWS completes
+any active invocation and exits without accepting another invocation.
+
+When AWS Lambda sends `SIGTERM`, LWS likewise completes any active invocation and then performs
+its regular cleanup, including closing the Lua state. AWS Lambda provides a maximum shutdown
+duration of 500 milliseconds for a runtime with an internal extension and terminates the process
+if cleanup does not finish within that period. For more information, see the
+[Lambda Extensions API documentation](https://docs.aws.amazon.com/lambda/latest/dg/runtimes-extensions-api.html).
