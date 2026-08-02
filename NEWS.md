@@ -18,6 +18,7 @@
 - Harden request cleanup ordering.
 - Remove broken request body `*a` read hook.
 - Fix Set-Cookie serialization with Expires attributes.
+- Harden streaming response header lifetime.
 
 
 ## Release 0.9.1 beta (2025-09-04)

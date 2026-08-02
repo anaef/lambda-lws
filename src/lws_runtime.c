@@ -415,6 +415,10 @@ int main (int argc, char *argv[]) {
 			lws_free(ctx.diagnostic.data);
 			lws_str_null(&ctx.diagnostic);
 		}
+		if (ctx.streaming_headers) {
+			curl_slist_free_all(ctx.streaming_headers);
+			ctx.streaming_headers = NULL;
+		}
 		if (ctx.streaming_prelude.data) {
 			lws_free(ctx.streaming_prelude.data);
 			lws_str_null(&ctx.streaming_prelude);

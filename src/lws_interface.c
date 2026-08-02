@@ -1,7 +1,7 @@
 /*
  * LWS runtime interface
  *
- * Copyright (C) 2025 Andre Naef
+ * Copyright (C) 2025, 2026 Andre Naef
  */
 
 
@@ -872,7 +872,6 @@ int lws_stream_response (lws_ctx_t *ctx, int finish) {
 
 	/* init state */
 	rc = -1;
-	curl_headers = NULL;
 	doc = NULL;
 
 	/* prepare response URL */
@@ -882,18 +881,21 @@ int lws_stream_response (lws_ctx_t *ctx, int finish) {
 			ctx->request_id->data);
 
 	/* prepare Lambda headers */
-	curl_headers = curl_slist_append(curl_headers, LWS_LAMBDA_STREAMING_CT);
+	curl_headers = curl_slist_append(ctx->streaming_headers, LWS_LAMBDA_STREAMING_CT);
 	if (!curl_headers) {
 		goto oom;
 	}
-	curl_headers = curl_slist_append(curl_headers, LWS_LAMBDA_STREAMING_MODE);
+	ctx->streaming_headers = curl_headers;
+	curl_headers = curl_slist_append(ctx->streaming_headers, LWS_LAMBDA_STREAMING_MODE);
 	if (!curl_headers) {
 		goto oom;
 	}
-	curl_headers = curl_slist_append(curl_headers, "Expect:");  /* prevent "Expect: 100-continue" */
+	ctx->streaming_headers = curl_headers;
+	curl_headers = curl_slist_append(ctx->streaming_headers, "Expect:");  /* prevent 100-continue */
 	if (!curl_headers) {
 		goto oom;
 	}
+	ctx->streaming_headers = curl_headers;
 
 	/* prepare Lambda body */
 	doc = yyjson_mut_doc_new(NULL);
@@ -921,7 +923,7 @@ int lws_stream_response (lws_ctx_t *ctx, int finish) {
 	lws_curl_reset(ctx);
 	curl_easy_setopt(ctx->curl, CURLOPT_POST, 1L);
 	curl_easy_setopt(ctx->curl, CURLOPT_URL, response_url);
-	curl_easy_setopt(ctx->curl, CURLOPT_HTTPHEADER, curl_headers);
+	curl_easy_setopt(ctx->curl, CURLOPT_HTTPHEADER, ctx->streaming_headers);
 	curl_easy_setopt(ctx->curl, CURLOPT_POSTFIELDSIZE_LARGE, (curl_off_t)-1);
 	curl_easy_setopt(ctx->curl, CURLOPT_READFUNCTION, lws_handle_read);
 	curl_easy_setopt(ctx->curl, CURLOPT_READDATA, ctx);
@@ -938,9 +940,6 @@ int lws_stream_response (lws_ctx_t *ctx, int finish) {
 	lws_log(LWS_LOG_CRIT, "out of memory");
 
 	cleanup:
-	if (curl_headers != NULL) {
-		curl_slist_free_all(curl_headers);
-	}
 	if (doc) {
 		yyjson_mut_doc_free(doc);
 	}

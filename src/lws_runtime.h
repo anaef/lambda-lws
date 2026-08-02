@@ -1,7 +1,7 @@
 /*
  * LWS runtime
  *
- * Copyright (C) 2025. 2026 Andre Naef
+ * Copyright (C) 2025, 2026 Andre Naef
  */
 
 
@@ -84,6 +84,7 @@ struct lws_ctx_s {
 	size_t                resp_body_pos;		  /* response body position for streaming */
 	size_t                resp_body_cap;          /* response body capacity */
 	lws_str_t             diagnostic;             /* diagnostic information */
+	struct curl_slist    *streaming_headers;      /* streaming headers */
 	lws_str_t             streaming_prelude;	  /* streaming prelude */
 	size_t                streaming_prelude_pos;  /* streaming prelude position */
 	unsigned              likely_utf8:1;          /* response body is likely valid UTF-8 */
