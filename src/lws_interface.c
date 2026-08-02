@@ -405,6 +405,10 @@ int lws_get_next_invocation (lws_ctx_t *ctx) {
 	}
 
 	/* parse inplace */
+	if (ctx->body.len == 0) {
+		lws_log(LWS_LOG_ERR, "empty invocation body");
+		return -1;
+	}
 	lws_memzero(ctx->body.data + ctx->body.len, YYJSON_PADDING_SIZE);
 	ctx->doc = yyjson_read_opts(ctx->body.data, ctx->body.len, YYJSON_READ_INSITU, NULL, NULL);
 	if (!ctx->doc) {
