@@ -87,7 +87,7 @@ static int lws_curl_perform (lws_ctx_t *ctx, int flags) {
 		if (mres != CURLM_OK) {
 			lws_log(LWS_LOG_CRIT, "libcurl multi error code:%d str:%s", mres,
 					curl_multi_strerror(mres));
-			return -1;
+			goto cleanup;
 		}
 		if (!(flags & LWS_CURL_FINALIZE) && (ctx->streaming_paused || !remain)) {
 			return 0;  /* not supposed to finalize and done for now */
