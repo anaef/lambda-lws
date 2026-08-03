@@ -32,6 +32,7 @@
 - Reuse the streaming response buffer after flushing.
 - Add compatibility with Lua 5.5.
 - Improve the example AWS deployment scripts.
+- Enhance the default examples with init and pre chunks.
 
 
 ## Release 0.9.1 beta (2025-09-04)

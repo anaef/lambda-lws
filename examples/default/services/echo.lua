@@ -12,7 +12,9 @@ else
 end
 
 -- Prepare the response body
-response.body:write("Time: ", tz.date(), "\n")
+response.body:write("Initialized: ", tostring(INITIALIZED), "\n")
+response.body:write("NOW: ", tostring(NOW), "\n")
+response.body:write("now(): ", tostring(now()), "\n")
 response.body:write("IP: ", request.ip, "\n")
 response.body:write("Method: ", request.method, "\n")
 response.body:write("Path: ", request.path, "\n")
@@ -39,6 +41,7 @@ response.body:write("Raw cookies:\n")
 for i, c in lwsipairs(request.raw.body.cookies or { }) do
 	response.body:write("\t", c, "\n")
 end
+response.body:write("Time: ", tz.date(), "\n")
 
 -- Set status and headers
 response.status = lws.status.OK

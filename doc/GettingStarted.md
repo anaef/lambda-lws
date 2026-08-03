@@ -47,6 +47,8 @@ The `lambda-lws-examples-default` service defines the following environment vari
 | LWS_MATCH       | ^/(\w+)(/?.*)$    | Regular expression capturing main Lua chunk and optional path info  |
 | LWS_MAIN        | services/$1.lua   | Main Lua chunk filename derived from first capture group            |
 | LWS_PATH_INFO   | $2                | Extra path info passed from second capture group                    |
+| LWS_INIT        | handlers/init.lua | Lua state initialization chunk                                      |
+| LWS_PRE         | handlers/pre.lua  | Request environment initialization chunk                            |
 | LWS_DIAGNOSTIC  | on                | Enables diagnostic in HTTP error responses                          |
 
 The `LWS_MATCH` and `LWS_MAIN` values map HTTP request paths to files with main Lua chunks that
@@ -59,7 +61,8 @@ capture group of the match expression, i.e., `(/?.*)`.
 > [!NOTE]
 > This mapping concept mirrors the `lws` directive used in LWS for NGINX.
 
-Additionally, the service enables diagnostic responses using the `LWS_DIAGNOSTIC` variable.
+The init and pre chunks demonstrate Lua state and request environment initialization. Additionally,
+the service enables diagnostic responses using the `LWS_DIAGNOSTIC` variable.
 
 
 ### Event Handler Example
