@@ -1,6 +1,11 @@
 # LWS for AWS Lambda Release Notes
 
 
+## Release 0.9.3 beta
+
+- Harden table with random hash seed.
+
+
 ## Release 0.9.2a beta (2026-08-03)
 
 - Add DevContainer.

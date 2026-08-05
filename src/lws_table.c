@@ -5,9 +5,14 @@
  */
 
 
+#include <fcntl.h>
+#include <unistd.h>
 #include <lws_runtime.h>
 #include <lws_table.h>
 #include <lws_log.h>
+
+
+#define LWS_TABLE_RANDOM_DEVICE  "/dev/urandom"
 
 
 static lws_uint_t lws_table_hash(lws_table_t *t, lws_str_t *key);
@@ -18,6 +23,12 @@ static lws_table_entry_t *lws_table_find(lws_table_t *t, lws_str_t *key, lws_uin
 static lws_table_entry_t *lws_table_insert(lws_table_t *t, lws_str_t *key, lws_uint_t hash);
 static void lws_table_remove(lws_table_t *t, lws_table_entry_t *entry);
 
+
+#if SIZE_MAX > UINT32_MAX
+static lws_uint_t lws_table_hash_seed = 14695981039346656037U;  /* FNV-1a offset basis */
+#else
+static lws_uint_t lws_table_hash_seed = 2166136261U;  /* FNV-1a offset basis */
+#endif
 
 static size_t lws_table_sizes[] = {
 	3, 5, 7, 11, 13, 17, 23, 29, 41, 53, 67, 89, 127, 157, 211, 277, 373, 499, 659, 877, 1171,
@@ -36,6 +47,30 @@ static size_t lws_table_sizes[] = {
 	272513087380099
 };
 static int lws_table_sizes_n = 112;
+
+int lws_table_init_hash () {
+	ssize_t     n;
+	int         fd;
+	lws_uint_t  seed;
+
+	fd = open(LWS_TABLE_RANDOM_DEVICE, O_RDONLY);
+	if (fd == -1) {
+		lws_log(LWS_LOG_CRIT, "failed to open " LWS_TABLE_RANDOM_DEVICE);
+		return -1;
+	}
+	n = read(fd, &seed, sizeof(seed));
+	if (n != (ssize_t)sizeof(seed)) {
+		lws_log(LWS_LOG_CRIT, "failed to read " LWS_TABLE_RANDOM_DEVICE);
+		close(fd);
+		return -1;
+	}
+	if (close(fd) != 0) {
+		lws_log(LWS_LOG_CRIT, "failed to close " LWS_TABLE_RANDOM_DEVICE);
+		return -1;
+	}
+	lws_table_hash_seed = seed;
+	return 0;
+}
 
 lws_table_t *lws_table_create (size_t load) {
 	size_t        alloc;
@@ -251,9 +286,12 @@ static lws_uint_t lws_table_hash (lws_table_t *t, lws_str_t *key) {
 	lws_uint_t  hash;
 
 	/* FNV-1a; source: http://www.isthe.com/chongo/tech/comp/fnv/index.html#FNV-1a */
-	#define _LWS_TABLE_HASH_OFFSET_BASIS 14695981039346656037U
+	#if SIZE_MAX > UINT32_MAX
 	#define _LWS_TABLE_HASH_PRIME 1099511628211
-	hash = _LWS_TABLE_HASH_OFFSET_BASIS;
+	#else
+	#define _LWS_TABLE_HASH_PRIME 16777619
+	#endif
+	hash = lws_table_hash_seed;
 	p = key->data + key->len;
 	if (t->ci) {
 		while (p > key->data) {
@@ -267,7 +305,6 @@ static lws_uint_t lws_table_hash (lws_table_t *t, lws_str_t *key) {
 			hash *= _LWS_TABLE_HASH_PRIME;
 		}
 	}
-	#undef _LWS_TABLE_HASH_OFFSET_BASIS
 	#undef _LWS_TABLE_HASH_PRIME
 	return hash;
 }

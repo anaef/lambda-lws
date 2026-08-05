@@ -251,6 +251,13 @@ int main (int argc, char *argv[]) {
 		goto global_cleanup;
 	}
 
+	/* initialize table hashing */
+	if (lws_table_init_hash() != 0) {
+		lws_post_error(&ctx, "failed to initialize table hashing");
+		rc = EXIT_FAILURE;
+		goto global_cleanup;
+	}
+
 	/* initailize stat cache */
 	ctx.stat_cache = lws_table_create(32);
 	if (!ctx.stat_cache) {

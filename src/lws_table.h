@@ -1,7 +1,7 @@
 /*
  * LWS table
  *
- * Copyright (C) 2023,2025 Andre Naef
+ * Copyright (C) 2023-2026 Andre Naef
  */
 
 
@@ -47,6 +47,7 @@ struct lws_table_entry_s {
 };
 
 
+int lws_table_init_hash(void);
 lws_table_t *lws_table_create(size_t load);
 void lws_table_free(lws_table_t *t);
 void lws_table_clear(lws_table_t *t);
