@@ -56,7 +56,7 @@ void *lws_calloc (size_t size) {
 	void  *p;
 
 	p = malloc(size);
-	if (__builtin_expect(p == NULL, 1)) {
+	if (__builtin_expect(p == NULL, 0)) {
 		lws_log(LWS_LOG_CRIT, "failed to allocate memory size:%zu", size);
 		return NULL;
 	}

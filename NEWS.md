@@ -3,6 +3,7 @@
 
 ## Release 0.9.3 beta
 
+- Fix compiler branch hint for calloc memory allocation failure.
 - Harden table with random hash seed.
 
 
