@@ -25,7 +25,11 @@ OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 SUCH DAMAGE.
 */
 
-/* adapted from NGINX 1.24.0 */
+/*
+ * Adapted from NGINX 1.24.0.
+ * Modifications are copyright (c) 2025 Andre Naef and licensed under the MIT
+ * License; see the project LICENSE file.
+ */
 
 
 #ifndef _LWS_NGX_INCLUDED
