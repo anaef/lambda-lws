@@ -1,7 +1,7 @@
 /*
  * LWS codec tests
  *
- * Copyright (C) 2025 Andre Naef
+ * Copyright (C) 2025, 2026 Andre Naef
  */
 
 
@@ -117,13 +117,61 @@ static void test_base64_encode_len (void) {
 }
 
 static void test_utf8 (void) {
+	/* valid empty sequence */
+	{
+		uint8_t empty[] = {0};
+		assert(lws_valid_utf8(empty, 0) == 0);
+	}
+
 	/* valid ascii */
 	assert(lws_valid_utf8((const uint8_t *)"hello", 5) == 0);
+
+	/* valid minimum 2-byte sequence (U+0080) */
+	{
+		uint8_t minimum[] = {0xC2,0x80};
+		assert(lws_valid_utf8(minimum, sizeof(minimum)) == 0);
+	}
+
+	/* valid maximum 2-byte sequence (U+07FF) */
+	{
+		uint8_t maximum[] = {0xDF,0xBF};
+		assert(lws_valid_utf8(maximum, sizeof(maximum)) == 0);
+	}
 
 	/* valid 3-byte sequence (Euro sign) */
 	{
 		uint8_t euro[] = {0xE2,0x82,0xAC};
 		assert(lws_valid_utf8(euro, sizeof(euro)) == 0);
+	}
+
+	/* valid minimum 3-byte sequence (U+0800) */
+	{
+		uint8_t minimum[] = {0xE0,0xA0,0x80};
+		assert(lws_valid_utf8(minimum, sizeof(minimum)) == 0);
+	}
+
+	/* valid sequence before surrogate range (U+D7FF) */
+	{
+		uint8_t before[] = {0xED,0x9F,0xBF};
+		assert(lws_valid_utf8(before, sizeof(before)) == 0);
+	}
+
+	/* valid sequence after surrogate range (U+E000) */
+	{
+		uint8_t after[] = {0xEE,0x80,0x80};
+		assert(lws_valid_utf8(after, sizeof(after)) == 0);
+	}
+
+	/* valid maximum 3-byte sequence (U+FFFF) */
+	{
+		uint8_t maximum[] = {0xEF,0xBF,0xBF};
+		assert(lws_valid_utf8(maximum, sizeof(maximum)) == 0);
+	}
+
+	/* valid minimum 4-byte sequence (U+10000) */
+	{
+		uint8_t minimum[] = {0xF0,0x90,0x80,0x80};
+		assert(lws_valid_utf8(minimum, sizeof(minimum)) == 0);
 	}
 
 	/* valid 4-byte sequence (grinning face U+1F600) */
@@ -132,16 +180,70 @@ static void test_utf8 (void) {
 		assert(lws_valid_utf8(smile, sizeof(smile)) == 0);
 	}
 
-	/* invalid: stray continuation bytes */
+	/* valid maximum 4-byte sequence (U+10FFFF) */
 	{
-		uint8_t bad1[] = {0x80,0x80};
-		assert(lws_valid_utf8(bad1, sizeof(bad1)) == -1);
+		uint8_t maximum[] = {0xF4,0x8F,0xBF,0xBF};
+		assert(lws_valid_utf8(maximum, sizeof(maximum)) == 0);
 	}
 
-	/* invalid: truncated sequence (C2 missing continuation) */
+	/* invalid stray continuation byte */
 	{
-		uint8_t bad2[] = {0xC2};
-		assert(lws_valid_utf8(bad2, sizeof(bad2)) == -1);
+		uint8_t bad[] = {0x80};
+		assert(lws_valid_utf8(bad, sizeof(bad)) == -1);
+	}
+
+	/* invalid overlong 2-byte sequence */
+	{
+		uint8_t bad[] = {0xC0,0x80};
+		assert(lws_valid_utf8(bad, sizeof(bad)) == -1);
+	}
+
+	/* invalid overlong 3-byte sequence */
+	{
+		uint8_t bad[] = {0xE0,0x9F,0xBF};
+		assert(lws_valid_utf8(bad, sizeof(bad)) == -1);
+	}
+
+	/* invalid surrogate */
+	{
+		uint8_t bad[] = {0xED,0xA0,0x80};
+		assert(lws_valid_utf8(bad, sizeof(bad)) == -1);
+	}
+
+	/* invalid overlong 4-byte sequence */
+	{
+		uint8_t bad[] = {0xF0,0x8F,0xBF,0xBF};
+		assert(lws_valid_utf8(bad, sizeof(bad)) == -1);
+	}
+
+	/* invalid sequence above U+10FFFF */
+	{
+		uint8_t bad[] = {0xF4,0x90,0x80,0x80};
+		assert(lws_valid_utf8(bad, sizeof(bad)) == -1);
+	}
+
+	/* invalid continuation byte */
+	{
+		uint8_t bad[] = {0xE2,0x28,0xA1};
+		assert(lws_valid_utf8(bad, sizeof(bad)) == -1);
+	}
+
+	/* invalid truncated 2-byte sequence */
+	{
+		uint8_t bad[] = {0xC2};
+		assert(lws_valid_utf8(bad, sizeof(bad)) == -1);
+	}
+
+	/* invalid truncated 3-byte sequence */
+	{
+		uint8_t bad[] = {0xE0,0xA0};
+		assert(lws_valid_utf8(bad, sizeof(bad)) == -1);
+	}
+
+	/* invalid truncated 4-byte sequence */
+	{
+		uint8_t bad[] = {0xF0,0x90,0x80};
+		assert(lws_valid_utf8(bad, sizeof(bad)) == -1);
 	}
 }
 
