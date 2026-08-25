@@ -1,7 +1,7 @@
 # LWS for AWS Lambda Release Notes
 
 
-## Release 0.9.3 beta
+## Release 0.9.3 beta (2026-08-25)
 
 - Optimize UTF-8 validation.
 - Fix compiler branch hint for calloc memory allocation failure.
